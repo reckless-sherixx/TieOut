@@ -135,15 +135,20 @@
 :root {
   /* One accent colour, used for every emphasis in the app: primary buttons,
      focus rings, the tier bars, the netting diagram flow. */
-  --brand: oklch(0.55 0.17 256);
-  --brand-foreground: oklch(0.985 0 0);
-  --brand-subtle: oklch(0.955 0.022 256);
+  /* Signal amber. A FILL, never text: measured 1.99:1 as text on the page
+     ground, which is not a near miss. Ink on amber is 9.21:1, so every use is
+     a block with --brand-foreground on top. --brand-strong is the same hue
+     refitted to 5.14:1 for the rare case a word has to carry the accent. */
+  --brand: oklch(0.782 0.158 72.3);
+  --brand-foreground: oklch(0.181 0.006 55.9);
+  --brand-strong: oklch(0.536 0.158 72.3);
+  --brand-subtle: oklch(0.945 0.045 82);
 
   /* Chrome layer, recessed 0.024 L from the page. */
-  --surface: oklch(0.976 0 0);
-  --surface-foreground: oklch(0.145 0 0);
-  --surface-hover: oklch(0.962 0 0);
-  --surface-active: oklch(0.938 0 0);
+  --surface: oklch(0.968 0.006 95);
+  --surface-foreground: oklch(0.181 0.006 55.9);
+  --surface-hover: oklch(0.945 0.008 95);
+  --surface-active: oklch(0.915 0.010 95);
   --surface-selected: var(--brand-subtle);
   --skeleton: oklch(0.945 0 0);
 
@@ -151,32 +156,38 @@
      ground an error message actually sits on, which is under the floor. So
      the error TEXT is a darker step of the same hue (5.53:1 on that ground)
      and --destructive keeps its job as the fill and border colour. */
-  --error-fg: oklch(0.52 0.22 27.325);
-  --error-surface: oklch(0.972 0.014 27);
+  --error-fg: oklch(0.554 0.193 23);
+  --error-surface: oklch(0.955 0.030 23);
 
   /* Accent hue 256 rotated -60 / +180 / +60, lightness re-fitted to the
      accent's own 4.9:1 on white, chroma capped at 0.11 (accent: 0.17). */
-  --matched: oklch(0.537 0.084 196);
-  --excepted: oklch(0.551 0.107 76);
-  --rejected: oklch(0.56 0.11 316);
+  /* Reserved. Green is matched, red is false-match, and the accent is never
+     either -- an amber that competed with them would make the two numbers that
+     decide whether to trust this run harder to find. Fitted against the TINTED
+     ground (a wash over --surface-active), not against the page, so they hold
+     in a status pill as well as in body text. */
+  --matched: oklch(0.509 0.140 156.6);
+  --excepted: oklch(0.536 0.158 72.3);
+  --rejected: oklch(0.554 0.193 23);
 
   /* Worst ground for each is a 10% wash of itself over --surface-active,
      where the base tokens measure 3.63:1. These measure 4.63:1 and 4.61:1
      there, and 5.9:1 on the page. */
-  --excepted-fg: oklch(0.491 0.107 76);
-  --rejected-fg: oklch(0.5 0.11 316);
+  --matched-fg: oklch(0.509 0.140 156.6);
+  --excepted-fg: oklch(0.536 0.158 72.3);
+  --rejected-fg: oklch(0.554 0.193 23);
 
   /* One number, so every disabled control agrees on how far it recedes. */
   --disabled-opacity: 0.5;
   /* The ground a focus ring clears against inside a dense table row. */
-  --ring-offset: oklch(1 0 0);
+  --ring-offset: oklch(0.990 0.007 97.3);
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.990 0.007 97.3);
+  --foreground: oklch(0.181 0.006 55.9);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.181 0.006 55.9);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.181 0.006 55.9);
   --primary: var(--brand);
   --primary-foreground: var(--brand-foreground);
   --secondary: oklch(0.97 0 0);
@@ -193,16 +204,27 @@
   --muted-foreground: oklch(0.519 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.55 0.17 256);
+  --destructive: oklch(0.626 0.193 23);
+  /* Ink, not a tint. In this world a border is structure, not a hairline
+     separator, so it carries the full 18.3:1 of the text colour. */
+  --border: oklch(0.181 0.006 55.9);
+  --input: oklch(0.181 0.006 55.9);
+  /* The focus ring is ink for the same reason: amber rings at 1.99:1 against
+     the page would be decoration pretending to be an affordance. */
+  --ring: oklch(0.181 0.006 55.9);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  /* Neobrutalism: structure has no radius. Controls keep 2px so a button
+     still reads as a control rather than as a table cell. */
+  --radius: 0rem;
+  --radius-control: 2px;
+  --ink: oklch(0.181 0.006 55.9);
+  --border-w: 3px;
+  --shadow-brut: 4px 4px 0 var(--ink);
+  --shadow-brut-sm: 2px 2px 0 var(--ink);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -214,9 +236,13 @@
 }
 
 .dark {
-  --brand: oklch(0.68 0.15 256);
-  --brand-foreground: oklch(0.17 0.03 256);
-  --brand-subtle: oklch(0.29 0.06 256);
+  /* Amber holds up in dark as both fill and text: on the 0.145 page it
+     measures well past the floor either way, so --brand-strong collapses onto
+     --brand here rather than inventing a second value nothing needs. */
+  --brand: oklch(0.800 0.150 74);
+  --brand-foreground: oklch(0.17 0.02 74);
+  --brand-strong: oklch(0.800 0.150 74);
+  --brand-subtle: oklch(0.30 0.055 74);
 
   /* Chrome layer, raised 0.043 L from the page and held below --card, so
      the stack reads page < chrome < panel in dark and page > chrome >
@@ -228,22 +254,23 @@
   --surface-selected: var(--brand-subtle);
   --skeleton: oklch(0.245 0 0);
 
-  --error-fg: oklch(0.75 0.16 22);
-  --error-surface: oklch(0.24 0.045 22);
+  --error-fg: oklch(0.760 0.170 23);
+  --error-surface: oklch(0.25 0.050 23);
 
   /* Same rotation, re-fitted to the accent's 6.8:1 on the dark page,
      chroma capped at 0.13 (accent: 0.15). */
-  --matched: oklch(0.666 0.105 196);
-  --excepted: oklch(0.683 0.13 76);
-  --rejected: oklch(0.692 0.13 316);
+  --matched: oklch(0.720 0.150 157);
+  --excepted: oklch(0.780 0.145 74);
+  --rejected: oklch(0.700 0.170 23);
 
   /* Same re-fit in dark, where the worst grounds are the RAISED ones --
      --surface-active and --brand-subtle -- and the base tokens measure
      4.27:1 and 4.20:1 on a wash of themselves over each. These measure
      4.60:1 there. --muted-foreground needs no dark change: it measures
      5.45:1 on its own worst ground already. */
-  --excepted-fg: oklch(0.705 0.13 76);
-  --rejected-fg: oklch(0.721 0.13 316);
+  --matched-fg: oklch(0.740 0.150 157);
+  --excepted-fg: oklch(0.795 0.145 74);
+  --rejected-fg: oklch(0.720 0.170 23);
 
   --ring-offset: oklch(0.145 0 0);
 
@@ -261,10 +288,13 @@
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.68 0.15 256);
+  --destructive: oklch(0.700 0.170 23);
+  /* Structure again, not a hairline. In dark the ink inverts to near-white so
+     the border keeps carrying the same job it does in light. */
+  --border: oklch(0.930 0.004 95);
+  --input: oklch(0.930 0.004 95);
+  --ring: oklch(0.930 0.004 95);
+  --ink: oklch(0.930 0.004 95);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -346,5 +376,64 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+/* --- Neobrutalist structure -------------------------------------------------
+ *
+ * Three primitives, and everything on the page is built from them. They exist
+ * as utilities rather than as a component library because the console already
+ * has its own components; this changes how they are drawn, not what they are.
+ *
+ * The hard offset shadow is earned here rather than borrowed: this world was
+ * chosen as neobrutalist, so a zero-blur block shadow IS the depth system and
+ * not a costume over a soft one. Nothing in this file uses both.
+ */
+
+.brut {
+  border: var(--border-w) solid var(--ink);
+  border-radius: 0;
+  box-shadow: var(--shadow-brut);
+  background: var(--card);
+}
+
+/* A panel that sits inside another panel takes the border and drops the
+   shadow. Stacked block shadows read as a rendering error, and a nested card
+   is the lazy container anyway -- this makes the flat version the easy one. */
+.brut-flat {
+  border: var(--border-w) solid var(--ink);
+  border-radius: 0;
+  background: var(--card);
+}
+
+/* The press IS the feedback: the surface travels into its own shadow. No
+   colour change, no scale, no transition on the offset -- a block shadow that
+   eases looks broken, because the whole point is that it has no blur. */
+.brut-press {
+  box-shadow: var(--shadow-brut);
+  transition: box-shadow 0.06s linear, translate 0.06s linear;
+}
+.brut-press:hover:not(:disabled) {
+  box-shadow: var(--shadow-brut-sm);
+  translate: 2px 2px;
+}
+.brut-press:active:not(:disabled) {
+  box-shadow: 0 0 0 var(--ink);
+  translate: 4px 4px;
+}
+
+/* Focus is a second ring outside the border, so it is visible against both the
+   page and the amber fill -- an inset ring would disappear into either. */
+.focus-ring:focus-visible,
+.brut:focus-visible,
+.brut-press:focus-visible {
+  outline: var(--border-w) solid var(--ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brut-press,
+  .brut-press:hover:not(:disabled),
+  .brut-press:active:not(:disabled) {
+    translate: none;
   }
 }
