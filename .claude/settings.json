@@ -1,0 +1,7 @@
+{
+  "model": "opus",
+  "effortLevel": "high",
+  "worktree": {
+    "symlinkDirectories": ["node_modules", ".venv"]
+  }
+}

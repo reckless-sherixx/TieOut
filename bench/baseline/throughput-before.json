@@ -1,0 +1,38 @@
+[
+  {
+    "dataset": "seed42-50",
+    "records": 50,
+    "warmups": 5,
+    "repetitions": 25,
+    "best_seconds": 0.0014319000001705717,
+    "median_seconds": 0.0021524000003410038,
+    "worst_seconds": 0.003580100000363018,
+    "best_rec_per_s": 34918.63956564276,
+    "median_rec_per_s": 23229.882917709776,
+    "worst_rec_per_s": 13966.090331256126
+  },
+  {
+    "dataset": "seed42-500",
+    "records": 500,
+    "warmups": 5,
+    "repetitions": 25,
+    "best_seconds": 0.01974289999998291,
+    "median_seconds": 0.028212799999892013,
+    "worst_seconds": 0.042714799999885145,
+    "best_rec_per_s": 25325.560074782974,
+    "median_rec_per_s": 17722.452220336647,
+    "worst_rec_per_s": 11705.544682436637
+  },
+  {
+    "dataset": "seed42-5000",
+    "records": 5000,
+    "warmups": 5,
+    "repetitions": 25,
+    "best_seconds": 0.8597939999999653,
+    "median_seconds": 1.1560380000000805,
+    "worst_seconds": 2.5918172000001505,
+    "best_rec_per_s": 5815.346466712029,
+    "median_rec_per_s": 4325.117340433145,
+    "worst_rec_per_s": 1929.1483982742725
+  }
+]

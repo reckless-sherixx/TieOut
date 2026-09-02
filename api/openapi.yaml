@@ -1,0 +1,2063 @@
+openapi: 3.1.0
+info:
+  title: Multi-Source Reconciliation API
+  version: "0.1.0"
+  description: >
+    Contract for the Razorpay multi-source reconciliation demo (spec §12).
+    Paths and schemas only — no implementation. Every response schema mirrors
+    the frozen pydantic contracts in core/models.py; do not change field
+    names, types, or nullability here without re-syncing that file.
+
+paths:
+  # --- authentication (Phase 4, spec section 5) ------------------------------
+  #
+  # Present in every build; ACTIVE only when RECON_AUTH=enabled. The default is
+  # disabled, under which every other operation below is served as a single
+  # local operator and never answers 401 -- that default is the compatibility
+  # contract with the console and the demo path, not an oversight.
+
+  /api/auth/login:
+    post:
+      operationId: login
+      summary: Exchange a seeded credential for a session cookie
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: >
+            Authenticated. The session travels in a `Set-Cookie:
+            recon_session=...; HttpOnly; SameSite=Lax` header; the body names
+            the org so a client need not decode the cookie to know which tenant
+            it is looking at.
+          headers:
+            Set-Cookie:
+              description: The signed session cookie. HttpOnly.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: >
+            The credential was not accepted. **One response for both failure
+            modes**: an unknown address and a wrong password are identical in
+            status, body and latency, because answering them differently is an
+            account-enumeration oracle.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedError"
+        "503":
+          $ref: "#/components/responses/AuthDisabled"
+
+  /api/auth/logout:
+    post:
+      operationId: logout
+      summary: Drop the session cookie
+      tags: [auth]
+      responses:
+        "204":
+          description: >
+            The cookie is cleared. Idempotent, and deliberately reachable
+            without a session: requiring one would strand a client holding a
+            cookie the server has already stopped trusting.
+          headers:
+            Set-Cookie:
+              description: The expired session cookie.
+              schema:
+                type: string
+
+  /api/datasets/generate:
+    post:
+      operationId: generateDataset
+      summary: Generate a synthetic adversarial dataset
+      tags: [datasets]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateDatasetRequest"
+      responses:
+        "200":
+          description: Dataset generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatasetGenerated"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/runs:
+    post:
+      operationId: createRun
+      summary: Start a reconciliation run over a generated dataset
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRunRequest"
+      responses:
+        "202":
+          description: >
+            Accepted. The run has been queued; poll
+            GET /api/runs/{id}/status for progress.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunCreated"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    get:
+      operationId: listRuns
+      summary: Run history
+      tags: [runs]
+      responses:
+        "200":
+          description: All runs, most recent first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RunSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/runs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getRun
+      summary: Summary metrics for one run
+      tags: [runs]
+      responses:
+        "200":
+          description: Run summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunSummary"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/runs/{id}/status:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getRunStatus
+      summary: Poll run progress
+      tags: [runs]
+      description: >
+        Polled job state (spec §11: background task + polling, not SSE).
+      responses:
+        "200":
+          description: Current run state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/runs/{id}/exceptions:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: listRunExceptions
+      summary: Paginated exceptions for a run
+      tags: [runs, exceptions]
+      parameters:
+        - name: reason_code
+          in: query
+          required: false
+          description: Filter to exceptions with this reason code.
+          schema:
+            $ref: "#/components/schemas/ReasonCode"
+        - name: page
+          in: query
+          required: false
+          description: 1-indexed page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          description: Page size.
+          schema:
+            type: integer
+            minimum: 1
+            default: 50
+      responses:
+        "200":
+          description: One page of exceptions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedReconExceptions"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/runs/{id}/matches:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: listRunMatches
+      summary: Paginated accepted matches for a run
+      description: >
+        The MatchGroups the run accepted, with the tier that closed each one and
+        its evidence lines.
+
+        The counterpart of GET /api/runs/{id}/exceptions, and it exists for the
+        same reason that list does: a console that shows only what failed lets a
+        reviewer check the failures and take the successes on trust — when the
+        successes are what the match rate is made of.
+
+        No subject record and no audit trail. Both live on
+        GET /api/matches/{id}, fetched for the row a reviewer opens.
+      tags: [runs, matches]
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: 1-indexed page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          description: Page size.
+          schema:
+            type: integer
+            minimum: 1
+            default: 50
+      responses:
+        "200":
+          description: One page of matches, ordered by match_id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedMatches"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/runs/{id}/records:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: listRunRecords
+      summary: Paginated source records for a run
+      description: >
+        The rows the engine actually read: the sales register, the PSP
+        settlement report, or the bank statement, one source at a time.
+
+        This is the only endpoint that shows a record which produced no verdict.
+        Everywhere else a record arrives attached to one — as an exception's
+        subject, or as the bank line a match resolved — so a row that matched
+        cleanly and was never excepted has no other way to reach the screen.
+
+        `source` is required, and the response echoes it. SubjectRecord is a
+        bare oneOf with no discriminator inside the records themselves, so the
+        tag has to travel with the page; a page mixing three shapes would leave
+        a client sniffing fields, which the SubjectRecord schema forbids.
+      tags: [runs, records]
+      parameters:
+        - name: source
+          in: query
+          required: true
+          description: Which of the three input tables to page over.
+          schema:
+            $ref: "#/components/schemas/RecordSource"
+        - name: page
+          in: query
+          required: false
+          description: 1-indexed page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          description: Page size.
+          schema:
+            type: integer
+            minimum: 1
+            default: 50
+      responses:
+        "200":
+          description: One page of records, ordered by the source's own id field.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedRecords"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/runs/{id}/settlements:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: listRunSettlements
+      summary: Paginated settlements for a run
+      description: >
+        One row per settlement_id the run's PSP legs name — matched or not —
+        carrying the reconstructed breakdown, the payment-leg count, the bank
+        line it closed against and the tier that closed it.
+
+        This is the index for the netting diagram. Without it,
+        GET /api/runs/{id}/batches/{settlement_id} is reachable only for a
+        settlement whose id the caller already knows, and a batch that never
+        closed is not reachable at all.
+
+        No audit trail: like the exceptions list this pages over the whole run,
+        and the trail is fetched per row from GET /api/matches/{id}.
+      tags: [runs, settlements]
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: 1-indexed page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          description: Page size.
+          schema:
+            type: integer
+            minimum: 1
+            default: 50
+      responses:
+        "200":
+          description: One page of settlements, ordered by settlement_id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedSettlements"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/runs/{id}/batches/{settlement_id}:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+      - name: settlement_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getBatchNetting
+      summary: Netting breakdown for one settlement batch
+      description: >
+        Powers the netting diagram: N orders → settlement batch → one bank
+        line, with deductions annotated.
+      tags: [runs, batches]
+      responses:
+        "200":
+          description: Netting breakdown.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchNetting"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/runs/{id}/drift:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getRunDrift
+      summary: What changed between this run and another
+      description: >
+        Compares this run against a baseline and reports which metrics moved,
+        which of those moves are material, and which reason codes appeared or
+        changed count.
+
+        A finance controller's question is rarely "what is the match rate" — it
+        is "what changed since last time, and why". A match rate that falls from
+        98% to 91% overnight because a new deduction type appeared is the
+        finding; the 91% on its own is not.
+
+        Detection is deterministic and lives entirely in core/drift/compare.py,
+        against named thresholds. `narrative` is prose an LLM may write over
+        facts it did not compute, and is never an input to `material`. This
+        endpoint runs no model, so it always answers with narrative: null.
+
+        Absent `against`, the baseline is the immediately previous COMPLETED run
+        on the same dataset.
+      tags: [runs, drift]
+      parameters:
+        - name: against
+          in: query
+          required: false
+          description: >
+            Run id to compare against. Omit for the immediately previous
+            completed run on the same dataset.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The drift report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriftReport"
+        "404":
+          description: >
+            Either run id is unknown, or no `against` was given and this run has
+            no earlier completed run on its dataset to compare with — there is
+            no drift report to return.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # --- uploads (Phase 5, spec 2026-08-30 section 3) ---------------------------
+  #
+  # The layer in front of everything above. A merchant does not have a
+  # generated dataset; they have a settlement export and a bank statement, and
+  # these four operations are how those become the canonical records the rest
+  # of this contract already describes.
+
+  /api/uploads:
+    post:
+      operationId: createUpload
+      summary: Ingest one file a merchant exported
+      description: >
+        Content-addressed storage, header-shape detection, canonical records
+        and quarantine — the whole of spec 2026-08-30 §3 in one operation.
+
+        **Idempotent by content.** The same bytes uploaded twice return the
+        SAME upload id with `already_ingested: true`, and no second set of
+        records or quarantine rows is written. The identity is the SHA-256 of
+        the file, not its name: a renamed re-upload is still the same upload,
+        and two different files with the same name are two.
+
+        `already_ingested` is recognition, not an error — the response is a 200
+        carrying everything the first ingest produced, and a client should show
+        it as "we already have this" rather than as a failure.
+
+        Detection reads bytes and never the filename, so `hdfc_aug.csv`
+        containing an ICICI statement is read as an ICICI statement.
+      tags: [uploads]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The exported file, as-is. Not decoded by the client.
+      responses:
+        "200":
+          description: >
+            The file was read. New or already held — `already_ingested` says
+            which, and every other field is identical in both cases.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadReceipt"
+        "413":
+          description: >
+            The file is larger than this API accepts. A different fact from a
+            file nothing recognised, and answered differently so a client need
+            not read prose to tell them apart.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        "422":
+          description: >
+            No adapter recognised the file, or nothing decoded its bytes.
+
+            The body is structured rather than prose: `reason` says which of
+            the two it was, `threshold` is the confidence detection required,
+            and `candidates` lists every format this build reads with the score
+            it actually gave this file. That is the difference between "we
+            cannot read this" and "your export scored 0.42 against the Razorpay
+            layout, which is below the 0.60 bar".
+
+            **No row of the file appears here.** Uploaded content is served
+            back only through GET /api/uploads/{id}/quarantine, which is behind
+            a session; an error body is not.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadRefusedError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    get:
+      operationId: listUploads
+      summary: Every file this org has uploaded
+      tags: [uploads]
+      responses:
+        "200":
+          description: All uploads, most recent first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Upload"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/uploads/{id}:
+    parameters:
+      - $ref: "#/components/parameters/UploadId"
+    get:
+      operationId: getUpload
+      summary: One upload — format detected, confidence, and what it produced
+      tags: [uploads]
+      responses:
+        "200":
+          description: The upload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/uploads/{id}/quarantine:
+    parameters:
+      - $ref: "#/components/parameters/UploadId"
+    get:
+      operationId: listUploadQuarantine
+      summary: Paginated quarantined rows, raw text and reason
+      description: >
+        The rows an upload could not turn into canonical records, kept exactly
+        as they arrived so a human can look at the line and see the problem.
+
+        **This is the only endpoint on this API that serves a merchant's own
+        file content back verbatim**, which is precisely why the raw line
+        appears here and in no error body anywhere else (spec 2026-08-30 §5).
+        It is authenticated like every other financial read and every request
+        against it writes an access_log row.
+
+        Ordered by line number, so paging through a damaged export walks it top
+        to bottom and never shows a row twice.
+      tags: [uploads]
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: 1-indexed page number.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          description: Page size.
+          schema:
+            type: integer
+            minimum: 1
+            default: 50
+      responses:
+        "200":
+          description: One page of quarantined rows, ordered by line number.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedQuarantine"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/exceptions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Exception identifier (ReconException.exception_id).
+        schema:
+          type: string
+    get:
+      operationId: getException
+      summary: One exception, its subject record, and its full audit trail
+      description: >
+        Powers the audit slide-over (spec §13 #3): the subject record, the
+        reason code, the LLM hypothesis if any, the verifier verdict and which
+        check failed, and the full audit trail.
+
+        The audit trail lives here rather than on
+        GET /api/runs/{id}/exceptions because that response is paginated over
+        as many as 5,000 rows; inlining a trail per row would make the
+        exception table pay for detail almost none of its rows will show.
+      tags: [exceptions]
+      responses:
+        "200":
+          description: Exception detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconExceptionAudited"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/matches/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Match identifier (MatchGroup.match_id).
+        schema:
+          type: string
+    get:
+      operationId: getMatch
+      summary: Match evidence and full audit trail
+      tags: [matches]
+      responses:
+        "200":
+          description: Match group plus its audit trail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: recon_session
+      description: >
+        The signed session cookie issued by POST /api/auth/login. Signed with
+        HMAC-SHA256 over RECON_SECRET_KEY -- not encrypted, and not a JWT: the
+        payload is three server-issued claims (subject, org, expiry) and no
+        algorithm is negotiated with the client.
+
+        Deliberately NOT declared as a global `security:` requirement. Whether
+        it is required is a deployment decision (RECON_AUTH), and a contract
+        that asserted "always required" would be false for the configuration
+        this system is normally run in. Each operation instead declares the 401
+        it can answer.
+
+  parameters:
+    RunId:
+      name: id
+      in: path
+      required: true
+      description: Run identifier (RunSummary.run_id).
+      schema:
+        type: string
+
+    UploadId:
+      name: id
+      in: path
+      required: true
+      description: Upload identifier (Upload.upload_id).
+      schema:
+        type: string
+
+  responses:
+    NotFound:
+      description: No resource exists with the given id.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/NotFoundError"
+
+    Unauthorized:
+      description: >
+        No valid session. Answered only when RECON_AUTH=enabled; with auth
+        disabled -- the default -- no operation on this API can return it.
+
+        The body names what is missing (a session) and where to get one (the
+        login route). It never names a user, an org or a configuration value:
+        "no such user" is a fact an unauthenticated caller has not earned.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/UnauthorizedError"
+
+    AuthDisabled:
+      description: >
+        Authentication is not enabled on this deployment, so there is no
+        session to issue. 503 rather than 404 on purpose: the operation exists
+        and this contract declares it; what is absent is configuration, and the
+        detail names the variable to set.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ServiceUnavailableError"
+
+    Conflict:
+      description: >
+        Both resources exist, and their state makes the request meaningless.
+        Used by GET /api/runs/{id}/drift when the two runs are of different
+        dataset shapes, or when either has no Metrics to compare. Refusing is
+        deliberate: silently returning a comparison of rates over different
+        denominators is worse than returning nothing.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ConflictError"
+
+  schemas:
+    # --- Shared primitives ---------------------------------------------
+
+    Money:
+      type: integer
+      format: int64
+      description: "Integer paise. Never a decimal."
+
+    ReasonCode:
+      type: string
+      description: Why a subject could not be cleanly matched (spec §6.4).
+      enum:
+        - NO_SETTLEMENT_REF
+        - AMOUNT_MISMATCH
+        - ORPHAN_BANK_LINE
+        - ORPHAN_PSP_TXN
+        - DUPLICATE_PSP_TXN
+        - AMBIGUOUS_MULTI_CANDIDATE
+        - UNPARSEABLE_NARRATION
+        - MISSING_ORDER_REF
+
+    VerifierCheck:
+      type: string
+      description: >
+        One of the five deterministic verifier checks (spec §8.2), in the order
+        they run. `uniqueness` runs last and rejects a hypothesis when more than
+        one unclaimed candidate settlement satisfies the arithmetic.
+      enum:
+        - existence
+        - exclusivity
+        - causality
+        - arithmetic
+        - uniqueness
+
+    RecordSource:
+      type: string
+      description: >
+        Which of the three spec §6.2 input tables a record came from. The same
+        three values ReconException.subject_type takes, so the tag needs no
+        translation: "order" → Order, "psp_txn" → PSPTransaction, "bank_line" →
+        BankLine.
+      enum:
+        - order
+        - psp_txn
+        - bank_line
+
+    RunState:
+      type: string
+      description: Lifecycle state of a run. Matches RunSummary.state exactly.
+      enum:
+        - pending
+        - running
+        - completed
+        - failed
+
+    LoginRequest:
+      type: object
+      description: >
+        The whole of this product's identity input surface. There is no signup,
+        no password reset and no invite: accounts are seeded from the
+        RECON_USERS environment variable, which makes adding one a deployment
+        action. That is a scope decision, a recorded scope decision rather than
+        half-built here.
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+          description: Never logged, never echoed, never persisted.
+
+    LoginResponse:
+      type: object
+      description: >
+        Who the session says you are. The org id is returned so a client can
+        label its own screen without decoding the cookie -- it is not an input
+        anywhere, and no request body on this API accepts one.
+      required: [email, org_id]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+        org_id:
+          type: string
+
+    UnauthorizedError:
+      type: object
+      description: >
+        FastAPI's HTTPException shape, for a 401. Same shape as NotFoundError
+        and named separately so the two carry their own descriptions.
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: >
+            Names the missing thing -- a session -- and the route that issues
+            one. Never names a user, an org, or the value of any secret.
+
+    ServiceUnavailableError:
+      type: object
+      description: FastAPI's HTTPException shape, for a 503.
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: Names the environment variable that is not set.
+
+    NotFoundError:
+      type: object
+      description: FastAPI's default HTTPException error shape.
+      required: [detail]
+      properties:
+        detail:
+          type: string
+
+    ConflictError:
+      type: object
+      description: >
+        FastAPI's default HTTPException error shape, for a 409. Same shape as
+        NotFoundError and named separately so the two carry their own
+        descriptions rather than one name meaning two things.
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          description: >
+            Names both runs and the specific state that makes the comparison
+            meaningless — the two record counts, or which run has no metrics.
+
+    # --- core/models.py mirrors -----------------------------------------
+
+    # Subject records (spec §6.2). The audit slide-over shows "the subject
+    # record" (spec §13 #3), and web/ is forbidden from reading core/models.py,
+    # so the three input shapes are mirrored here field-for-field. Money is an
+    # integer; dates are ISO-8601 strings; every nullability below is real and
+    # load-bearing.
+
+    Order:
+      type: object
+      description: Mirrors core/models.py:Order.
+      required:
+        - order_id
+        - order_date
+        - customer_ref
+        - gross_amount
+        - currency
+        - status
+      properties:
+        order_id:
+          type: string
+          description: 'e.g. "ORD-004471"'
+        order_date:
+          type: string
+          format: date
+        customer_ref:
+          type: string
+        gross_amount:
+          $ref: "#/components/schemas/Money"
+        currency:
+          type: string
+          enum: ["INR"]
+        status:
+          type: string
+          enum: ["paid", "refunded", "partially_refunded", "cancelled"]
+
+    PSPTransaction:
+      type: object
+      description: Mirrors core/models.py:PSPTransaction.
+      required:
+        - txn_id
+        - txn_type
+        - order_id
+        - captured_at
+        - amount
+        - settlement_id
+        - settled_at
+      properties:
+        txn_id:
+          type: string
+          description: 'Prefixed "pay_", "rfnd_", "adj_", "cb_", "fee_", "tax_".'
+        txn_type:
+          type: string
+          enum:
+            - payment
+            - refund
+            - fee
+            - tax
+            - chargeback
+            - adjustment
+            - reserve
+        order_id:
+          description: May be absent or garbled — that absence is the missing_order_ref defect.
+          type: ["string", "null"]
+        captured_at:
+          type: string
+          format: date-time
+        amount:
+          description: >
+            SIGNED, from the merchant's point of view: payments positive; fee,
+            tax, refund, chargeback and reserve negative. A settlement's net is
+            therefore a plain sum. Do not conflate with the bank line's unsigned
+            credit/debit magnitudes.
+          $ref: "#/components/schemas/Money"
+        settlement_id:
+          description: 'Prefixed "setl_". Null for a leg in no settlement batch.'
+          type: ["string", "null"]
+        settled_at:
+          type: ["string", "null"]
+          format: date
+
+    BankLine:
+      type: object
+      description: Mirrors core/models.py:BankLine.
+      required:
+        - line_id
+        - txn_date
+        - narration
+        - credit
+        - debit
+        - balance
+        - utr
+      properties:
+        line_id:
+          type: string
+        txn_date:
+          type: string
+          format: date
+        narration:
+          description: Deliberately messy. Render verbatim; never normalise for display.
+          type: string
+        credit:
+          description: >
+            UNSIGNED magnitude; direction is carried by which of credit/debit is
+            populated. Null on a debit line.
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        debit:
+          description: UNSIGNED magnitude. Null on a credit line.
+          oneOf:
+            - $ref: "#/components/schemas/Money"
+            - type: "null"
+        balance:
+          $ref: "#/components/schemas/Money"
+        utr:
+          description: Often absent.
+          type: ["string", "null"]
+
+    SubjectRecord:
+      description: >
+        The record an exception or a match is about. Exactly one of the three
+        spec §6.2 input shapes. Narrow on the sibling `subject_type` field:
+        "order" → Order, "psp_txn" → PSPTransaction, "bank_line" → BankLine.
+        There is no discriminator property inside the records themselves, so the
+        subject_type is the only reliable tag — do not sniff fields.
+      oneOf:
+        - $ref: "#/components/schemas/Order"
+        - $ref: "#/components/schemas/PSPTransaction"
+        - $ref: "#/components/schemas/BankLine"
+
+    Metrics:
+      type: object
+      description: Mirrors core/models.py:Metrics. Rates are 0.0-1.0.
+      required:
+        - auto_match_rate
+        - assisted_match_rate
+        - exception_rate
+        - false_match_rate
+        - precision
+        - recall_on_resolvable
+        - trap_capture_rate
+        - llm_rejection_rate
+        - throughput_records_per_sec
+        - llm_cost_usd_per_100
+        - llm_tokens_per_100
+        - tier_counts
+        - itc_substantiated_paise
+        - itc_at_risk_paise
+        - itc_variance_paise
+      properties:
+        auto_match_rate:
+          type: number
+        assisted_match_rate:
+          type: number
+        exception_rate:
+          type: number
+        false_match_rate:
+          type: number
+        precision:
+          type: number
+        recall_on_resolvable:
+          type: number
+        trap_capture_rate:
+          type: number
+        llm_rejection_rate:
+          type: number
+        throughput_records_per_sec:
+          type: number
+        llm_cost_usd_per_100:
+          type: number
+          description: "USD per 100 records. Not a paise field — this is a dollar cost metric."
+        llm_tokens_per_100:
+          type: integer
+        tier_counts:
+          type: object
+          description: >
+            Matches produced per tier, taken from the engine's own tier
+            assignment (MatchGroup.tier). Powers the run-detail match-rate
+            breakdown by tier (spec §13 #2).
+
+            All five keys are ALWAYS present. A tier that scored nothing is 0,
+            never an omitted key — "T1: 0" and "we do not know what T1 did" are
+            different claims, and only the first one is renderable. Render every
+            key, including the zeros.
+          required: [T0, T1, T2, T3, LLM]
+          additionalProperties: false
+          properties:
+            T0:
+              type: integer
+            T1:
+              type: integer
+            T2:
+              type: integer
+            T3:
+              type: integer
+            LLM:
+              type: integer
+        itc_substantiated_paise:
+          type: integer
+          description: >
+            Input tax credit the run substantiates, in integer paise (spec §6).
+            GST both computed from a MATCHED settlement and covered by a row of
+            psp_gst_invoice.csv — claimable and evidenced.
+
+            Money, so integer paise and never a float. Zero for a dataset that
+            carries no psp_gst_invoice.csv, which is a valid dataset.
+        itc_at_risk_paise:
+          type: integer
+          description: >
+            Input tax credit at risk, in integer paise (spec §6). GST that is
+            computed but not invoiced, or invoiced but not substantiated by a
+            settlement the engine could close.
+
+            The second half is the coupling worth rendering: a settlement the
+            run fails to reconcile moves rupees out of
+            itc_substantiated_paise and into this field, which is what makes
+            the match rate a money figure rather than a percentage.
+        itc_variance_paise:
+          type: integer
+          description: >
+            Signed total disagreement between computed and invoiced GST, in
+            integer paise (spec §6). Unlike itc_at_risk_paise it does not take
+            an absolute value, so it is a net position and MAY BE NEGATIVE —
+            render the sign.
+
+    RunSummary:
+      type: object
+      description: Mirrors core/models.py:RunSummary.
+      required:
+        - run_id
+        - seed
+        - record_count
+        - state
+        - created_at
+        - match_count
+        - exception_count
+        - metrics
+      properties:
+        run_id:
+          type: string
+        seed:
+          type: integer
+        record_count:
+          type: integer
+        state:
+          $ref: "#/components/schemas/RunState"
+        created_at:
+          type: string
+          format: date-time
+          description: >
+            When the run was created. Stamped at the API boundary and never
+            inside core/ — the global no-wall-clock-in-core constraint. Always
+            present, including on a pending or running run: a run that exists
+            was created at some point, and the run-history table renders this
+            rather than a client clock.
+        match_count:
+          type: integer
+        exception_count:
+          type: integer
+        metrics:
+          description: >
+            Null while the run has no metrics yet (still executing).
+            Always present as a key; never omitted.
+          anyOf:
+            - $ref: "#/components/schemas/Metrics"
+            - type: "null"
+
+    MatchGroup:
+      type: object
+      description: Mirrors core/models.py:MatchGroup.
+      required:
+        - match_id
+        - bank_line_id
+        - settlement_id
+        - psp_txn_ids
+        - order_ids
+        - gross
+        - fees
+        - tax
+        - refunds
+        - holds
+        - net
+        - tier
+        - confidence
+        - evidence
+      properties:
+        match_id:
+          type: string
+        bank_line_id:
+          type: string
+        settlement_id:
+          type: ["string", "null"]
+        psp_txn_ids:
+          type: array
+          items:
+            type: string
+        order_ids:
+          type: array
+          items:
+            type: string
+        gross:
+          $ref: "#/components/schemas/Money"
+        fees:
+          $ref: "#/components/schemas/Money"
+        tax:
+          $ref: "#/components/schemas/Money"
+        refunds:
+          $ref: "#/components/schemas/Money"
+        holds:
+          $ref: "#/components/schemas/Money"
+        net:
+          description: Must equal the bank line credit.
+          $ref: "#/components/schemas/Money"
+        tier:
+          type: string
+          enum: ["T0", "T1", "T2", "T3", "LLM"]
+        confidence:
+          type: number
+        evidence:
+          type: array
+          description: Human-readable, one line per rule fired.
+          items:
+            type: string
+
+    Settlement:
+      type: object
+      description: >
+        Mirrors core/models.py:Settlement. One settlement batch of one run, as a
+        listable row.
+
+        Every money field comes from exactly one of two places and never a
+        third. Matched: the MatchGroup's own fields, passed through untouched.
+        Unmatched: core.matcher.batch.reconstruct over the settlement's active
+        legs — the matcher's own function. Nothing sums money a second way.
+
+        On a T3 row, gross - fees - tax - refunds - holds can sit up to the
+        matcher's tolerance away from net. That is the engine's definition, not
+        a rounding slip: MatchGroup.net IS the bank credit, and a T3 match is
+        one where the reconstruction and the credit disagree within tolerance.
+        The residual is spelled out in that match's evidence, and BatchNetting
+        behaves the same way for the same reason. Render the fields as given;
+        do not "correct" net to the sum of the parts.
+      required:
+        - settlement_id
+        - gross
+        - fees
+        - tax
+        - refunds
+        - holds
+        - net
+        - payment_leg_count
+        - matched
+        - bank_line_id
+        - match_id
+        - tier
+      properties:
+        settlement_id:
+          type: string
+          description: 'Prefixed "setl_".'
+        gross:
+          $ref: "#/components/schemas/Money"
+        fees:
+          $ref: "#/components/schemas/Money"
+        tax:
+          $ref: "#/components/schemas/Money"
+        refunds:
+          $ref: "#/components/schemas/Money"
+        holds:
+          $ref: "#/components/schemas/Money"
+        net:
+          $ref: "#/components/schemas/Money"
+        payment_leg_count:
+          type: integer
+          description: >
+            `payment` legs only, the spec §7.1 cardinality. Fee, tax, refund,
+            chargeback, reserve and adjustment legs are the batch's arithmetic,
+            not its size: a settlement with one payment, one fee and one tax leg
+            settles one order.
+        matched:
+          type: boolean
+          description: >
+            Whether the run closed this batch against a bank line. false is a
+            result, not a gap — an unclosed batch is what a reviewer opens this
+            listing to find.
+        bank_line_id:
+          description: >
+            The bank line this batch closed against. Null exactly when matched
+            is false.
+          type: ["string", "null"]
+        match_id:
+          description: >
+            The match that closed it (MatchGroup.match_id), for
+            GET /api/matches/{id}. Null exactly when matched is false.
+          type: ["string", "null"]
+        tier:
+          description: >
+            The tier that matched it, straight from MatchGroup.tier — never
+            re-derived, so this listing and Metrics.tier_counts cannot disagree
+            about which tier closed which batch. Null when unmatched.
+          oneOf:
+            - type: string
+              enum: ["T0", "T1", "T2", "T3", "LLM"]
+            - type: "null"
+
+    ReconException:
+      type: object
+      description: Mirrors core/models.py:ReconException.
+      required:
+        - exception_id
+        - subject_type
+        - subject_id
+        - reason_code
+        - amount
+        - llm_hypothesis
+        - verifier_verdict
+        - verifier_reason
+        - failed_check
+      properties:
+        exception_id:
+          type: string
+        subject_type:
+          type: string
+          enum: ["order", "psp_txn", "bank_line"]
+        subject_id:
+          type: string
+        reason_code:
+          $ref: "#/components/schemas/ReasonCode"
+        amount:
+          $ref: "#/components/schemas/Money"
+        llm_hypothesis:
+          type: ["string", "null"]
+        verifier_verdict:
+          type: string
+          enum: ["accepted", "rejected", "not_attempted"]
+        verifier_reason:
+          description: Free text, for a human. Never parse it.
+          type: ["string", "null"]
+        failed_check:
+          description: >
+            Machine-readable counterpart to verifier_reason: which of the five
+            verifier checks (spec §8.2) rejected the hypothesis. Null when the
+            hypothesis was accepted or no hypothesis was attempted. The audit
+            slide-over renders this directly; it must never string-parse
+            verifier_reason to find it.
+          oneOf:
+            - $ref: "#/components/schemas/VerifierCheck"
+            - type: "null"
+
+    AuditEntry:
+      type: object
+      description: Mirrors core/models.py:AuditEntry.
+      required:
+        - entry_id
+        - run_id
+        - subject_id
+        - stage
+        - actor
+        - rule
+        - evidence
+        - confidence
+        - sequence
+      properties:
+        entry_id:
+          type: string
+        run_id:
+          type: string
+        subject_id:
+          type: string
+        stage:
+          type: string
+          enum: ["ingest", "canonicalize", "match", "llm", "verify"]
+        actor:
+          type: string
+          enum: ["deterministic", "llm", "verifier"]
+        rule:
+          type: string
+        evidence:
+          type: string
+        confidence:
+          type: number
+        sequence:
+          type: integer
+          description: Monotonic within a run; no wall-clock in core.
+
+    # --- Composite / envelope schemas (not 1:1 with core/models.py) -----
+
+    ReconExceptionDetail:
+      description: >
+        A ReconException plus the subject record it is about. core/models.py
+        has no single class for this: ReconException carries subject_type and
+        subject_id, and the record itself is joined here at the API boundary.
+
+        Spec §13 #3 requires the audit slide-over to show "the subject record",
+        and web/ may not read core/models.py, so the record must arrive on the
+        wire rather than being reconstructed client-side from an id.
+      allOf:
+        - $ref: "#/components/schemas/ReconException"
+        - type: object
+          required: [subject]
+          properties:
+            subject:
+              description: >
+                The record named by subject_id, of the shape named by
+                subject_type. Always present — an exception whose subject could
+                not be resolved is a bug, not a null.
+              $ref: "#/components/schemas/SubjectRecord"
+
+    ReconExceptionAudited:
+      description: >
+        GET /api/exceptions/{id}: a ReconExceptionDetail plus its full audit
+        trail. This is the shape the audit slide-over renders.
+
+        Deliberately NOT what the paginated list returns: the list is
+        ReconExceptionDetail (exception + subject, no trail), so paging 5,000
+        rows stays cheap and the trail is fetched only for the row actually
+        opened.
+      allOf:
+        - $ref: "#/components/schemas/ReconExceptionDetail"
+        - type: object
+          required: [audit_trail]
+          properties:
+            audit_trail:
+              description: >
+                Every AuditEntry recorded for this subject, across all stages,
+                in `sequence` order. May be empty; never null.
+              type: array
+              items:
+                $ref: "#/components/schemas/AuditEntry"
+
+    MatchDetail:
+      description: >
+        GET /api/matches/{id}: a MatchGroup plus its subject bank line and its
+        full audit trail. core/models.py has no single class for this; it is
+        MatchGroup composed with the BankLine it settled against and the
+        AuditEntry rows for the same subject(s).
+      allOf:
+        - $ref: "#/components/schemas/MatchGroup"
+        - type: object
+          required: [subject, audit_trail]
+          properties:
+            subject:
+              description: >
+                The bank line this match resolved — the subject record for the
+                match's audit slide-over (spec §13 #3). Always present:
+                MatchGroup.bank_line_id is non-nullable.
+              $ref: "#/components/schemas/BankLine"
+            audit_trail:
+              type: array
+              items:
+                $ref: "#/components/schemas/AuditEntry"
+
+    BatchNettingOrderLine:
+      description: One order's contribution to a settlement batch, for the netting diagram.
+      type: object
+      required: [order_id, gross_amount]
+      properties:
+        order_id:
+          type: string
+        gross_amount:
+          $ref: "#/components/schemas/Money"
+
+    BatchNetting:
+      description: >
+        GET /api/runs/{id}/batches/{settlement_id}: netting breakdown for
+        the diagram (N orders → settlement batch → one bank line, deductions
+        annotated). Not modeled directly in core/models.py; assembled here
+        from the same fields MatchGroup carries for this settlement, plus
+        per-order amounts the diagram needs to draw the "N orders" fan-in.
+      type: object
+      required:
+        - settlement_id
+        - bank_line_id
+        - orders
+        - psp_txn_ids
+        - gross
+        - fees
+        - tax
+        - refunds
+        - holds
+        - net
+        - tier
+        - evidence
+      properties:
+        settlement_id:
+          type: string
+        bank_line_id:
+          type: string
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchNettingOrderLine"
+        psp_txn_ids:
+          type: array
+          items:
+            type: string
+        gross:
+          $ref: "#/components/schemas/Money"
+        fees:
+          $ref: "#/components/schemas/Money"
+        tax:
+          $ref: "#/components/schemas/Money"
+        refunds:
+          $ref: "#/components/schemas/Money"
+        holds:
+          $ref: "#/components/schemas/Money"
+        net:
+          description: Must equal the bank line credit.
+          $ref: "#/components/schemas/Money"
+        tier:
+          type: string
+          enum: ["T0", "T1", "T2", "T3", "LLM"]
+        evidence:
+          type: array
+          items:
+            type: string
+
+    # --- Drift detection (spec §7) --------------------------------------
+
+    MetricMove:
+      type: object
+      description: >
+        Mirrors core/models.py:MetricMove. One metric of Metrics, before and
+        after, and whether the move cleared this metric's threshold.
+
+        before/after/delta are `number` for every metric, integer-paise ones
+        included. A MetricMove is a comparison record, not a money field: it
+        carries rates, a throughput, a dollar cost and a paise count in the same
+        three slots, and every paise figure this system produces is far below
+        2**53 so a double holds it exactly. Money stays an integer in Metrics,
+        MatchGroup and everywhere it is money.
+
+        `material` is computed only from before and after against a named
+        threshold in core/drift/compare.py. DriftReport.narrative is never an
+        input to it.
+      required:
+        - metric
+        - before
+        - after
+        - delta
+        - material
+      properties:
+        metric:
+          type: string
+          description: The Metrics field name this move is about.
+        before:
+          type: number
+        after:
+          type: number
+        delta:
+          type: number
+          description: after - before, signed.
+        material:
+          type: boolean
+          description: >
+            Whether the move cleared this metric's threshold. Three rules, all
+            named constants in core/drift/compare.py: 0.01 absolute for rates;
+            any change at all for false_match_rate, precision and
+            trap_capture_rate, whose correct values are known constants; a
+            relative ratio for the unbounded magnitudes (throughput, cost,
+            tokens, the itc_* paise figures), where an absolute 0.01 would fire
+            on one paise and never on a throughput regression.
+
+    ReasonCodeMove:
+      type: object
+      description: >
+        Mirrors core/models.py:ReasonCodeMove. How often one ReasonCode fired,
+        before and after.
+
+        Reported only when the count changed: a code that fired ten times in
+        both runs is not drift. A code that stopped firing IS reported, with
+        appeared=false.
+      required:
+        - reason_code
+        - before
+        - after
+        - appeared
+      properties:
+        reason_code:
+          type: string
+          description: >
+            A ReasonCode value. Typed as a plain string rather than the
+            ReasonCode enum because the census is read out of a persisted run:
+            a run recorded before a code was added must still be comparable, and
+            an enum here would make that a validation error instead of a row.
+        before:
+          type: integer
+        after:
+          type: integer
+        appeared:
+          type: boolean
+          description: >
+            Absent before, present now. The reason-code threshold from spec §7 —
+            any appearance — and the shape of a new deduction type turning up
+            overnight.
+
+    DriftReport:
+      type: object
+      description: >
+        Mirrors core/models.py:DriftReport. What changed between two runs of the
+        same dataset shape, and why.
+      required:
+        - baseline_run_id
+        - current_run_id
+        - moves
+        - reason_code_moves
+        - narrative
+      properties:
+        baseline_run_id:
+          type: string
+        current_run_id:
+          type: string
+        moves:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricMove"
+          description: >
+            One entry per numeric field of Metrics, in the declaration order of
+            that contract. Every metric is reported whether it moved or not; the
+            `material` flag is what separates a finding from a row.
+        reason_code_moves:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReasonCodeMove"
+          description: Ordered by reason_code. Only codes whose count changed.
+        narrative:
+          type: [string, "null"]
+          description: >
+            LLM-written prose over facts it did not compute; null when no model
+            ran. Never an input to MetricMove.material — the same division of
+            labour the verifier enforces, where the model may describe a fact
+            and may not decide anything.
+
+    # --- Pagination envelope --------------------------------------------
+
+    Pagination:
+      description: Reusable paging metadata for list endpoints.
+      type: object
+      required: [total, page, size]
+      properties:
+        total:
+          type: integer
+          description: Total number of items across all pages.
+        page:
+          type: integer
+          description: 1-indexed current page number.
+        size:
+          type: integer
+          description: Number of items per page.
+
+    PaginatedMatches:
+      description: >
+        One page of accepted matches, ordered by match_id. MatchGroup as the
+        engine emitted it — tier, confidence and the evidence lines included,
+        which are what make a match checkable rather than asserted.
+
+        Deliberately no subject record and no audit trail: this pages over every
+        match of the run, and both live on GET /api/matches/{id} for the row a
+        reviewer opens.
+      type: object
+      required: [items, total, page, size]
+      allOf:
+        - $ref: "#/components/schemas/Pagination"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/MatchGroup"
+
+    PaginatedRecords:
+      description: >
+        One page of ingested source records, all of one source, ordered by that
+        source's own id field (order_id / txn_id / line_id).
+
+        Narrow `items` on the page's `source`, never by sniffing fields — see
+        SubjectRecord. The three record schemas are the same ones the exception
+        and match detail endpoints already serve; nothing is projected or
+        summarised on the way out, so a null here is the ingested null.
+      type: object
+      required: [items, total, page, size, source]
+      allOf:
+        - $ref: "#/components/schemas/Pagination"
+        - type: object
+          required: [items, source]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/SubjectRecord"
+            source:
+              description: >
+                The source these items came from, echoed back so a client need
+                not remember what it asked for to know how to narrow the union.
+              $ref: "#/components/schemas/RecordSource"
+
+    PaginatedSettlements:
+      description: >
+        One page of settlement rows, ordered by settlement_id. Deliberately no
+        audit trail: this pages over every settlement of the run, and the trail
+        is fetched for the row a reviewer opens, from GET /api/matches/{id}.
+      type: object
+      required: [items, total, page, size]
+      allOf:
+        - $ref: "#/components/schemas/Pagination"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Settlement"
+
+    PaginatedReconExceptions:
+      description: >
+        One page of exception rows, each carrying its subject record so the
+        audit slide-over can open from the table with no second request.
+      type: object
+      required: [items, total, page, size]
+      allOf:
+        - $ref: "#/components/schemas/Pagination"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReconExceptionDetail"
+
+    # --- Uploads (spec 2026-08-30 section 3) ---------------------------
+
+    UploadState:
+      type: string
+      description: >
+        What reading the file produced. Three values because three outcomes a
+        single record count cannot tell apart are three different things to say
+        to a merchant:
+
+        `ingested` — at least one canonical record came out. Rows may have been
+        quarantined beside them; a review queue next to usable records is not a
+        failure.
+
+        `quarantined` — the file was read and EVERY row of it was refused. A
+        file full of damage.
+
+        `empty` — the file was read, its header was recognised, and it carried
+        no data rows at all. Usually the wrong date range, not a data-quality
+        problem.
+
+        A file no adapter recognised has no Upload at all: it is the 422 from
+        POST /api/uploads and nothing is retained.
+      enum:
+        - ingested
+        - quarantined
+        - empty
+
+    Upload:
+      type: object
+      description: >
+        One file a merchant sent, and what reading it produced. Every field is
+        a recorded fact except `state`, which is derived from the two counts —
+        see UploadState.
+      required:
+        - upload_id
+        - filename
+        - content_sha256
+        - byte_size
+        - format_id
+        - format_version
+        - confidence
+        - encoding
+        - state
+        - record_count
+        - quarantine_count
+        - skipped_rows
+        - order_count
+        - psp_txn_count
+        - bank_line_count
+        - uploaded_at
+      properties:
+        upload_id:
+          type: string
+          description: 'Prefixed "upl-".'
+        filename:
+          type: string
+          description: >
+            The name the browser sent. Recorded because a human recognises
+            their file by it, and consulted by nothing: detection reads bytes.
+        content_sha256:
+          type: string
+          description: >
+            SHA-256 of the raw bytes, lowercase hex. The upload's real
+            identity and the blob store's address for it — re-uploading these
+            bytes returns this same upload.
+        byte_size:
+          type: integer
+        format_id:
+          type: string
+          description: >
+            The adapter that read it — "razorpay-settlement-v2",
+            "bank-csv-hdfc-v1", "cod-remittance-delhivery-v1". A different
+            layout is a different id, never a flag on an existing one.
+        format_version:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: >
+            The winning adapter's own sniff score. Reported because an export
+            that cleared the threshold by 0.02 and one that scored 1.00 are
+            different situations, and a screen showing only the format name
+            would present them identically.
+        encoding:
+          type: string
+          description: >
+            Which codec actually decoded the file — "utf-8", "utf-8-sig",
+            "latin-1". A fact worth showing: "this ICICI export was latin-1"
+            explains a lot of downstream oddities.
+        state:
+          $ref: "#/components/schemas/UploadState"
+        record_count:
+          type: integer
+          description: Canonical records produced.
+        quarantine_count:
+          type: integer
+          description: >
+            Rows that could not become records, each kept verbatim and readable
+            through GET /api/uploads/{id}/quarantine. Never silently dropped.
+        skipped_rows:
+          type: integer
+          description: >
+            Rows the layout deliberately ignores — a trailing "Statement
+            Summary" block, say — counted so that
+            `data rows == records + quarantined + skipped` always closes.
+        order_count:
+          type: integer
+          description: Of record_count, how many are Orders.
+        psp_txn_count:
+          type: integer
+          description: Of record_count, how many are PSPTransactions.
+        bank_line_count:
+          type: integer
+          description: Of record_count, how many are BankLines.
+        uploaded_at:
+          type: string
+          format: date-time
+          description: >
+            ISO-8601, stamped at the API boundary like RunSummary.created_at.
+            Nothing under core/ reads a clock.
+
+    UploadReceipt:
+      description: >
+        An Upload plus the one fact that only the POST knows: whether these
+        bytes were already held.
+      type: object
+      required: [already_ingested]
+      allOf:
+        - $ref: "#/components/schemas/Upload"
+        - type: object
+          required: [already_ingested]
+          properties:
+            already_ingested:
+              type: boolean
+              description: >
+                True when this org already held these exact bytes. The upload
+                id, the counts and the detected format are the FIRST ingest's,
+                unchanged — nothing was re-parsed and nothing was written.
+
+    QuarantinedRow:
+      type: object
+      description: >
+        One row that did not become a canonical record, and everything needed
+        to fix it. Mirrors core/adapters/base.py:QuarantinedRow.
+      required: [row_number, raw, reason, detail]
+      properties:
+        row_number:
+          type: integer
+          description: >
+            Physical line number counting from 1 with the header included —
+            the number an editor shows, which is the entire point of recording
+            it. A file-level refusal sits at line 1.
+        raw:
+          type: string
+          description: >
+            The row exactly as it appeared. Merchant data: served here and in
+            no error body anywhere on this API.
+        reason:
+          $ref: "#/components/schemas/QuarantineReason"
+        detail:
+          type: string
+          description: >
+            What specifically was wrong, naming the column where there is one.
+            Prose for a human, grouped on `reason` by the machine.
+
+    QuarantineReason:
+      type: string
+      description: >
+        Why a row (or a file) could not become a canonical record. These
+        strings are stable and machine-readable — the quarantine review screen
+        groups by them — and mirror core/adapters/base.py:QuarantineReason.
+      enum:
+        - BAD_DECIMAL
+        - BAD_DATE
+        - MISSING_VALUE
+        - TRUNCATED_ROW
+        - EXTRA_FIELDS
+        - DUPLICATE_ROW
+        - UNKNOWN_VALUE
+        - UNSUPPORTED_ROW_TYPE
+        - AMBIGUOUS_DIRECTION
+        - ARITHMETIC_MISMATCH
+        - SCHEMA_VIOLATION
+        - UNDECODABLE_FILE
+        - MISSING_HEADER_COLUMN
+        - UNRECOGNISED_FORMAT
+
+    PaginatedQuarantine:
+      description: >
+        One page of quarantined rows, ordered by line number then by insertion
+        order — a total ordering, so page 2 can never repeat a row from page 1.
+      type: object
+      required: [items, total, page, size]
+      allOf:
+        - $ref: "#/components/schemas/Pagination"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/QuarantinedRow"
+
+    FormatCandidate:
+      type: object
+      description: One registered format and the confidence it gave a file.
+      required: [format_id, confidence]
+      properties:
+        format_id:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    UploadRefusedError:
+      type: object
+      description: >
+        The 422 from POST /api/uploads. Structured rather than prose, because
+        "why did it not read my export" has a numeric answer and a client that
+        only had a sentence could not show it.
+      required: [detail, reason, threshold, candidates]
+      properties:
+        detail:
+          type: string
+          description: >
+            The refusal in words, from the registry itself. Names formats,
+            scores and the threshold; never a byte of the file.
+        reason:
+          type: string
+          description: >
+            Which refusal it was. UNRECOGNISED_FORMAT means the file decoded
+            fine and no layout matched it; UNDECODABLE_FILE means the bytes are
+            not text at all, which is usually a spreadsheet or an archive
+            renamed to .csv. The fixes are different, so the two are.
+          enum:
+            - UNRECOGNISED_FORMAT
+            - UNDECODABLE_FILE
+        threshold:
+          type: number
+          description: >
+            The confidence detection required. Below this the registry refuses
+            rather than guesses: a file whose header half-resembles three
+            layouts is not a file to guess at.
+        candidates:
+          type: array
+          description: >
+            Every format this build reads and the score it gave this file, best
+            first. Empty for UNDECODABLE_FILE — no adapter was ever shown the
+            bytes, and a row of zeroes would imply six adapters had looked and
+            declined.
+          items:
+            $ref: "#/components/schemas/FormatCandidate"
+
+    # --- Request / response bodies for non-schema-mirroring endpoints ---
+
+    GenerateDatasetRequest:
+      type: object
+      required: [seed, record_count]
+      properties:
+        seed:
+          type: integer
+          description: RNG seed for reproducible generation (spec §10, e.g. 42).
+        record_count:
+          type: integer
+          description: Number of records to generate (e.g. 50, 500, 5000).
+        defect_mix:
+          type: object
+          description: >
+            OPTIONAL. Map of defect_type name (spec §10 table, e.g.
+            "many_to_one_batch", "cross_period_refund") to injected count. Not a
+            frozen core/models.py contract; kept as a free-form string-keyed map
+            rather than re-encoding the defect list here.
+
+            Omit it — or send null — for the default mix: every one of the ten
+            defect types in spec §10, injected at the proportions
+            `fixtures/tiny/` exhibits, scaled to record_count. That default is
+            the seeded adversarial dataset the demo and every scale run use, so
+            `{"seed": 42, "record_count": 50}` is a complete, valid request.
+
+            The default lives in exactly one place — `DEFAULT_DEFECT_MIX` in
+            `core/generator/defects.py` (Lane A) — and the API passes null
+            through to the generator rather than materialising a mix of its own.
+            An API-side default would be a second copy of the numbers and would
+            drift.
+
+            The UI has no control for this field (spec §13 #1 gives the new-run
+            dialog seed, record count and LLM on/off, and nothing else), so a
+            required defect_mix would be a field no client could populate.
+          additionalProperties:
+            type: integer
+
+    DatasetGenerated:
+      type: object
+      required: [dataset_id]
+      properties:
+        dataset_id:
+          type: string
+
+    CreateRunRequest:
+      type: object
+      description: >
+        One run, over exactly one of two sources. EXACTLY ONE of `dataset_id`
+        and `upload_ids` must be present; both or neither is a 422 naming what
+        arrived.
+
+        There is no `source` discriminator on purpose — it would be a third
+        field a client could set inconsistently with the other two. The
+        presence of the id is the choice.
+
+        Below the handler the two are the same job (api/jobs.py:_execute), so
+        the matcher, the analyst layer and the scorer cannot tell which door
+        the records came through.
+      required: [use_llm]
+      properties:
+        dataset_id:
+          type: ["string", "null"]
+          description: A dataset from POST /api/datasets/generate.
+        upload_ids:
+          type: ["array", "null"]
+          description: >
+            Uploads from POST /api/uploads, together covering the sources a run
+            needs — orders, PSP legs and bank lines. Order does not matter and
+            a repeated id contributes its records once.
+
+            **A run over uploads reports `metrics: null` and `seed: -1`, and
+            both are honest.** There is no ground truth for a merchant's own
+            files, so there is nothing to score against; and nothing generated
+            the records, so there is no seed. -1 is a value no caller could
+            have supplied, which is what lets a client say "run from uploaded
+            files" instead of printing "Seed 0".
+          items:
+            type: string
+        use_llm:
+          type: boolean
+
+    RunCreated:
+      type: object
+      required: [run_id]
+      properties:
+        run_id:
+          type: string
+
+    RunStatus:
+      description: Mirrors RunSummary.state plus in-flight progress detail.
+      type: object
+      required: [state, progress, stage]
+      properties:
+        state:
+          $ref: "#/components/schemas/RunState"
+        progress:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Fraction complete, 0.0-1.0.
+        stage:
+          type: string
+          description: Free-text label for the current pipeline stage.

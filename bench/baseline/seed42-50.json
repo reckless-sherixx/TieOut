@@ -1,0 +1,58 @@
+{
+  "audit_entry_count": 65,
+  "dataset": "seed42-50",
+  "exception_count": 6,
+  "exception_walk": [
+    "BL-0003 NO_SETTLEMENT_REF amount=4359908",
+    "BL-0007 AMOUNT_MISMATCH amount=2510744",
+    "BL-0013 AMBIGUOUS_MULTI_CANDIDATE amount=6908793",
+    "BL-0017 AMBIGUOUS_MULTI_CANDIDATE amount=6908793",
+    "BL-0018 AMOUNT_MISMATCH amount=3328196",
+    "pay_001085 DUPLICATE_PSP_TXN amount=4722300"
+  ],
+  "explain": [
+    "BL-0003: resolvable but left unmatched",
+    "BL-0007: resolvable but left unmatched",
+    "BL-0018: resolvable but left unmatched"
+  ],
+  "match_count": 12,
+  "metrics": {
+    "assisted_match_rate": 0.0,
+    "auto_match_rate": 0.8,
+    "exception_rate": 0.29411764705882354,
+    "false_match_rate": 0.0,
+    "itc_at_risk_paise": 0,
+    "itc_substantiated_paise": 0,
+    "itc_variance_paise": 0,
+    "llm_cost_usd_per_100": 0.0,
+    "llm_rejection_rate": 0.0,
+    "llm_tokens_per_100": 0,
+    "precision": 1.0,
+    "recall_on_resolvable": 0.8,
+    "throughput_records_per_sec": 0.0,
+    "tier_counts": {
+      "LLM": 0,
+      "T0": 10,
+      "T1": 1,
+      "T2": 0,
+      "T3": 1
+    },
+    "trap_capture_rate": 1.0
+  },
+  "record_count": 50,
+  "run_sha256": "6c56335efc09c2c4f28400fbbad10a4be4be5453d1926f83e1ca9d4e7973bce7",
+  "tier_walk": [
+    "BL-0002 T0 setl_00001 net=4122412",
+    "BL-0004 T0 setl_00003 net=11582220",
+    "BL-0005 T0 setl_00004 net=1684400",
+    "BL-0006 T0 setl_00005 net=7577731",
+    "BL-0008 T1 setl_00007 net=1022316",
+    "BL-0009 T0 setl_00008 net=14896287",
+    "BL-0010 T0 setl_00009 net=3207616",
+    "BL-0011 T0 setl_00010 net=7430547",
+    "BL-0012 T0 setl_00011 net=12472128",
+    "BL-0014 T0 setl_00013 net=2996247",
+    "BL-0015 T3 setl_00014 net=12160794",
+    "BL-0016 T0 setl_00015 net=5046150"
+  ]
+}

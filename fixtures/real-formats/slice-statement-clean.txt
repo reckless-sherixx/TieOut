@@ -1,0 +1,65 @@
+# FIXTURE -- HAND-WRITTEN. Not produced by core/generator, and no code in
+# core/generator/ may be used to read, regenerate or validate it.
+# Source schema: Slice (small finance bank) PDF account statement, TEXT LAYER.
+# This is not a PDF. It is what `bank_slice.extract_pages` produces from one --
+# one string per page, joined by a form feed -- so that the parser can be
+# tested without a PDF-writing dependency anywhere in the suite.
+#
+# The LAYOUT was read off a genuine 29-page Slice statement (see VALIDATION.md
+# section 4). Every VALUE below is INVENTED: no name, VPA, reference, amount or
+# balance here came from that file or from any real account. Counterparties are
+# made up, VPAs are @examplebank, and the balance chain was computed by hand.
+#
+# 15 data rows over 2 pages, zero expected quarantine, chain closes end to end.
+# Deliberately covered: both narration generations (`UPI Debit-...` and
+# `UPI-Debit-<ref>-...`), credit, debit and reversal in each; `Interest Cr.`;
+# `<ref>-monies transfer`; `<ref>-Bill payment`; `Account Transfer`; a wrap that
+# falls mid-VPA; a wrap that falls mid-word inside a trailing note; an amount
+# with a thousands comma; balances printed with a trimmed trailing zero
+# (`6,000` and `5,699.5`, which is what this bank really does); a reference that
+# is exactly 12 digits and therefore UTR-shaped; and -- on 20 Apr -- a narration
+# that WRAPS ONTO A LINE BEGINNING WITH A DATE, which is the trap the row-start
+# rule exists to survive.
+01 Apr '25 - 30 Apr '25
+1/2
+slice small finance bank
+02 Apr '25 UPI Debit-Kirana Corner Pvt-kiranacorner42@examp
+lebank-987654321012
+1234567890123456 -₹85 ₹4,215.50
+05 Apr '25 Interest Cr. for 04-Apr-2025 1234567890123457 ₹0.35 ₹4,215.85
+07 Apr '25 UPI-Debit-987654321013-Anand Traders-EXBK0001234-anandtraders@e
+xamplebank
+1234567890123458 -₹250 ₹3,965.85
+09 Apr '25 UPI-Credit-987654321014-Meera Textiles-EXBK0005678-meeratexti
+les99@examplebank
+1234567890123459 ₹1,500 ₹5,465.85
+11 Apr '25 UPI Credit-Sunrise Foods-sunrisefoods@examplebank-987654321015-Payment fr
+om slice
+1234567890123460 ₹2,000 ₹7,465.85
+13 Apr '25 UPI Reversal-Anand Traders-anandtraders@examplebank-987654321016-Payment fr
+om PhonePe
+1234567890123461 ₹250 ₹7,715.85
+01 Apr '25 - 30 Apr '25
+2/2
+slice small finance bank
+15 Apr '25 987654321017-monies transfer 1234567890123462 ₹500 ₹8,215.85
+16 Apr '25 987654321018-Bill payment 1234567890123463 -₹120 ₹8,095.85
+17 Apr '25 Account Transfer-987654321019 1234567890123464 -₹1,000 ₹7,095.85
+18 Apr '25 UPI-Debit-987654321020-Grand Bazaar Retail-EXBK0009999-grandba
+zaar@examplebank
+1234567890123465 -₹1,234.56 ₹5,861.29
+19 Apr '25 UPI-Reversal-987654321021-Grand Bazaar Retail-EXBK0009999-gran
+dbazaar@examplebank
+1234567890123466 ₹138.71 ₹6,000
+20 Apr '25 UPI Debit-Ledger Services-ledger@examplebank-987654321022-Invoice dated 2
+1 Apr '25 refers
+1234567890123467 -₹300 ₹5,700
+22 Apr '25 UPI-Debit-987654321023-Tea Stall Junction-EXBK0003333-teastall
+junction@examplebank
+123456789012 -₹45 ₹5,655
+23 Apr '25 UPI Credit-Neha Iyer-nehaiyer7@examplebank-987654321024
+1234567890123468 ₹44.50 ₹5,699.5
+24 Apr '25 UPI-Debit-987654321025-Vidya Books-EXBK0007777-vidyabooks@exam
+plebank
+1234567890123469 -₹199.50 ₹5,500
+Generated on 30 Apr '25

@@ -1,0 +1,26 @@
+# FIXTURE -- HAND-WRITTEN. Not produced by core/generator, and no code in
+# core/generator/ may be used to read, regenerate or validate it.
+# Source schema: Shopify order export (orders_export.csv).
+# The column names are VERIFIED against Shopify's own documentation --
+# help.shopify.com/en/manual/fulfillment/managing-orders/exporting-orders,
+# fetched 2026-08-30 -- and the Financial Status values against
+# shopify.dev OrderDisplayFinancialStatus. See ADAPTERS-REPORT.md.
+# This file carries a COLUMN SUBSET of that export, in the export's own order:
+# a real orders_export.csv has ~70 columns and most cells are empty. The full
+# verified 70-column header is exercised by a sniff test instead.
+# 12 data rows -> 10 Order records and 2 skipped rows. Shopify writes an
+# order's extra line items on their own lines, repeating `Name` and leaving
+# every order-level column blank; #1002 and #1008 each have one such line.
+Name,Email,Financial Status,Paid at,Fulfillment Status,Currency,Subtotal,Shipping,Taxes,Total,Discount Code,Discount Amount,Created at,Lineitem quantity,Lineitem name,Lineitem price,Lineitem SKU,Payment Method,Payment Reference,Refunded Amount,Id
+#1001,aarav.sharma@example.in,paid,2026-08-01 09:16:04 +0530,fulfilled,INR,2499.00,99.00,449.82,3047.82,,0.00,2026-08-01 09:15:32 +0530,1,Cotton Kurta - Indigo / M,2499.00,KRT-IND-M,Razorpay,pay_QwErTy0000001,0.00,5300000000001
+#1002,diya.patel@example.in,paid,2026-08-01 11:02:10 +0530,fulfilled,INR,3798.00,0.00,683.64,4481.64,,0.00,2026-08-01 11:01:47 +0530,1,Silk Scarf - Rose,1899.00,SCF-ROS,Razorpay,pay_QwErTy0000002,0.00,5300000000002
+#1002,,,,,,,,,,,,,1,Silk Scarf - Teal,1899.00,SCF-TEA,,,,
+#1003,ishaan.reddy@example.in,refunded,2026-08-02 14:20:00 +0530,fulfilled,INR,1299.00,49.00,242.64,1590.64,WELCOME10,144.33,2026-08-02 14:19:31 +0530,1,Leather Wallet - Tan,1299.00,WAL-TAN,Razorpay,pay_QwErTy0000003,1590.64,5300000000003
+#1004,ananya.nair@example.in,partially_refunded,2026-08-03 08:45:12 +0530,partial,INR,5998.00,0.00,1079.64,7077.64,,0.00,2026-08-03 08:44:55 +0530,2,Running Shoes - Black / 9,2999.00,SHO-BLK-9,Razorpay,pay_QwErTy0000004,3538.82,5300000000004
+#1005,vihaan.gupta@example.in,voided,,unfulfilled,INR,899.00,49.00,170.64,1118.64,,0.00,2026-08-03 19:10:02 +0530,1,Phone Case - Clear,899.00,CAS-CLR,Razorpay,pay_QwErTy0000005,0.00,5300000000005
+#1006,saanvi.iyer@example.in,paid,2026-08-04 10:05:44 +0530,fulfilled,INR,"1,04,999.00",0.00,"18,457.78","1,23,456.78",,0.00,2026-08-04 10:05:19 +0530,1,Espresso Machine - Steel,104999.00,ESP-STL,Razorpay,pay_QwErTy0000006,0.00,5300000000006
+#1007,arjun.menon@example.in,paid,2026-08-05 16:33:08 +0530,fulfilled,INR,749.00,49.00,143.64,941.64,,0.00,2026-08-05 16:32:41 +0530,3,Cotton Socks - Grey,249.00,SOC-GRY,Razorpay,pay_QwErTy0000007,0.00,5300000000007
+#1008,kavya.desai@example.in,paid,2026-08-06 12:14:29 +0530,fulfilled,INR,4498.00,0.00,809.64,5307.64,,0.00,2026-08-06 12:14:03 +0530,1,Yoga Mat - Purple,2249.00,MAT-PUR,Razorpay,pay_QwErTy0000008,0.00,5300000000008
+#1008,,,,,,,,,,,,,1,Yoga Block - Purple,2249.00,BLK-PUR,,,,
+#1009,rohan.bhat@example.in,paid,2026-08-07 07:58:16 +0530,unfulfilled,INR,199.00,49.00,44.64,292.64,,0.00,2026-08-07 07:57:52 +0530,1,Steel Straw,199.00,STR-STL,Razorpay,pay_QwErTy0000009,0.00,5300000000009
+#1010,meera.krishnan@example.in,paid,2026-08-08 21:41:03 +0530,fulfilled,INR,15999.00,0.00,2879.82,18878.82,,0.00,2026-08-08 21:40:37 +0530,1,"Office Chair, Mesh Back",15999.00,CHR-MSH,Razorpay,pay_QwErTy0000010,0.00,5300000000010

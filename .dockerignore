@@ -1,0 +1,96 @@
+# What must never enter a build context.
+#
+# Read this as two lists. The first is about SECRETS and is the reason this
+# file is not optional: anything left in the context can be `COPY`d by a later
+# edit to the Dockerfile, and anything in a layer is in the image even if a
+# subsequent layer deletes it. The second is about SIZE, and is why `docker
+# build` from this repository takes seconds rather than minutes -- `web/
+# node_modules` alone is larger than every source file in the project put
+# together.
+#
+# Verify rather than trust. From the repository root:
+#
+#   docker build -t recon-api .
+#   docker run --rm --entrypoint sh recon-api -c 'ls -a /app'
+#
+# There must be no `.env` in that listing, and none anywhere in the image:
+#
+#   docker run --rm --entrypoint sh recon-api -c 'find / -name ".env" 2>/dev/null'
+
+# --- secrets ------------------------------------------------------------------
+# `.env` is the one file in this repository that holds live credentials. It is
+# gitignored; it must also be dockerignored, because a build context is not a
+# git checkout and .gitignore has no effect on it.
+#
+# There is deliberately NO `!.env.example` re-inclusion here. The example file
+# holds no secrets, but a negation on a `.env*` pattern is exactly the kind of
+# line that gets widened later, and the image has no use for it.
+.env
+.env.*
+**/.env
+**/.env.*
+**/.env.local
+**/.env.production.local
+*.pem
+*.key
+id_rsa*
+
+# --- runtime state, never baked into an image ---------------------------------
+# `out/` holds the SQLite database, generated datasets and the upload blob
+# store. In a deployment these live on a mounted volume; a copy baked into the
+# image would be a stale database that shadows the volume on first boot and a
+# set of somebody else's uploaded files shipped inside the artefact.
+out/
+*.db
+*.db-wal
+*.db-shm
+
+# --- generated fixtures -------------------------------------------------------
+# 1.7 MB, uncommitted, and regenerable from the seed. The API does not read it;
+# only `tests/test_scale_acceptance.py` does, and tests are not in the image.
+fixtures/seed42-5000/
+
+# --- language toolchain caches ------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- the console ---------------------------------------------------------------
+# The web app is deployed by Vercel from the git repository, not from this
+# image. `web/node_modules` is the single largest directory in the tree.
+web/node_modules/
+web/.next/
+web/out/
+node_modules/
+.next/
+
+# --- version control and tooling ----------------------------------------------
+# `.git` carries every past revision of every file, including anything that was
+# ever committed and later removed.
+.git/
+.gitignore
+.gitattributes
+.github/
+.claude/
+.superpowers/
+.remember/
+.vscode/
+.idea/
+
+# --- not needed at runtime ----------------------------------------------------
+tests/
+bench/
+docs/
+deploy/
+*.md
+!README.md
+Dockerfile
+.dockerignore

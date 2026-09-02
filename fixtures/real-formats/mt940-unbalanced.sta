@@ -1,0 +1,22 @@
+# FIXTURE -- HAND-WRITTEN. Not produced by core/generator, and no code in
+# core/generator/ may be used to read, regenerate or validate it.
+# Source schema: SWIFT MT940 Customer Statement Message. Tag semantics are
+# VERIFIED-BY-STANDARD; see mt940-statement-clean.sta and ADAPTERS-REPORT.md.
+# Every line here parses. The BALANCE CHAIN DELIBERATELY DOES NOT CLOSE, and
+# that alone must quarantine the whole statement -- which, this file holding
+# exactly one statement, is a file-level quarantine.
+# Hand-computed in paise:
+#   opening                       5000000
+#   +2500000 -1000000             1500000
+#   chain says closing            6500000  -> 65000,00
+#   the file DECLARES closing     6510000  -> 65100,00
+#   difference                      10000  -> 100,00 unaccounted for
+:20:STMT260825001
+:25:HDFC0000123/50200012345678
+:28C:00101/00001
+:60F:C260824INR50000,00
+:61:2608250825CR25000,00NTRFN260825HDFC00011//HDFCR52026082501
+:86:NEFT CR-RAZORPAY SOFTWARE PVT LTD-N260825HDFC00011
+:61:2608250825D10000,00NTRFIMPS260825999888//HDFCR52026082502
+:86:IMPS-260825999888-VENDOR PAYOUT
+:62F:C260825INR65100,00

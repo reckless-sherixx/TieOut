@@ -1,0 +1,25 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# hypothesis' local example database: a cache of failing inputs it found on
+# THIS machine. Reproducibility here comes from the seeded sweep in
+# test_hardening.py, never from a directory somebody happened to have.
+.hypothesis/
+node_modules/
+.next/
+*.db
+.env
+.claude/settings.local.json
+out/
+.remember/tmp/
+.remember/logs/
+
+# The real bank artifacts used to validate adapters. Personal statements:
+# retained locally, never committed. See VALIDATION.md.
+incoming/
+
+# Regenerated on demand (1.7 MB); three documents state it is not committed,
+# and test_committed_fixtures_are_current.py deliberately excludes it. Ignored
+# so a reflexive `git add -A` cannot silently falsify that claim.
+fixtures/seed42-5000/

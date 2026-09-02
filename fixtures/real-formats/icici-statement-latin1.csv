@@ -1,0 +1,13 @@
+# FIXTURE -- HAND-WRITTEN. Not produced by core/generator.
+# Source schema: ICICI Bank account-statement export (UNVERIFIED -- see
+# icici-statement-clean.csv and ADAPTERS-REPORT.md).
+# THIS FILE IS ENCODED LATIN-1, ON PURPOSE. It does not decode as UTF-8: the
+# accented characters in rows 2 and 3 are single high bytes. Real exports from
+# older net-banking backends arrive exactly like this, and the adapter must
+# read them rather than fail on them.
+# 4 data rows, zero expected quarantine.
+S No.,Value Date,Transaction Date,Cheque Number,Transaction Remarks,Withdrawal Amount (INR ),Deposit Amount (INR ),Balance (INR )
+1,01-08-2026,01-08-2026,,NEFT-N260803ICIC0000001-RAZORPAY SOFTWARE PVT LTD,0.00,71153.04,571153.04 Cr
+2,02-08-2026,02-08-2026,,POS PURCHASE CAFÉ MOCHA BANDRA,450.00,0.00,570703.04 Cr
+3,03-08-2026,03-08-2026,,POS PURCHASE CRÈCHE FEES,1200.00,0.00,569503.04 Cr
+4,04-08-2026,04-08-2026,,NEFT-N260804ICIC0000002-RAZORPAY SOFTWARE PVT LTD,0.00,9568.68,579071.72 Cr

@@ -1,0 +1,25 @@
+# FIXTURE -- HAND-WRITTEN. Not produced by core/generator, and no code in
+# core/generator/ may be used to read, regenerate or validate it.
+# Source schema: Shopify order export (orders_export.csv). Column names
+# VERIFIED against Shopify's own documentation; see shopify-orders-clean.csv
+# and ADAPTERS-REPORT.md.
+# 13 data rows on physical lines 9-21. Ten of them are defective, one per
+# defect -- sub-paise total, empty Email, a line cut short, an ambiguous date,
+# a repeated order number, a documented-but-unsupported status, an undocumented
+# one, a non-INR currency, an unquoted comma, and a negative total on a paid
+# order. #2001, the first #2006 and #2012 are clean and must still yield their
+# Orders.
+Name,Email,Financial Status,Paid at,Fulfillment Status,Currency,Subtotal,Shipping,Taxes,Total,Discount Code,Discount Amount,Created at,Lineitem quantity,Lineitem name,Lineitem price,Lineitem SKU,Payment Method,Payment Reference,Refunded Amount,Id
+#2001,aarav.sharma@example.in,paid,2026-08-01 09:16:04 +0530,fulfilled,INR,2499.00,99.00,449.82,3047.82,,0.00,2026-08-01 09:15:32 +0530,1,Cotton Kurta - Indigo / M,2499.00,KRT-IND-M,Razorpay,pay_ZxCvBn0000001,0.00,5400000000001
+#2002,diya.patel@example.in,paid,2026-08-01 11:02:10 +0530,fulfilled,INR,1234.00,0.00,222.12,1234.567,,0.00,2026-08-01 11:01:47 +0530,1,Silk Scarf - Rose,1899.00,SCF-ROS,Razorpay,pay_ZxCvBn0000002,0.00,5400000000002
+#2003,,paid,2026-08-02 14:20:00 +0530,fulfilled,INR,1299.00,49.00,242.64,1590.64,,0.00,2026-08-02 14:19:31 +0530,1,Leather Wallet - Tan,1299.00,WAL-TAN,Razorpay,pay_ZxCvBn0000003,0.00,5400000000003
+#2004,ananya.nair@example.in,paid,2026-08-03 08:45:12 +0530
+#2005,vihaan.gupta@example.in,paid,2026-08-03 19:10:02 +0530,fulfilled,INR,899.00,49.00,170.64,1118.64,,0.00,03/08/2026,1,Phone Case - Clear,899.00,CAS-CLR,Razorpay,pay_ZxCvBn0000005,0.00,5400000000005
+#2006,saanvi.iyer@example.in,paid,2026-08-04 10:05:44 +0530,fulfilled,INR,749.00,49.00,143.64,941.64,,0.00,2026-08-04 10:05:19 +0530,1,Cotton Socks - Grey,249.00,SOC-GRY,Razorpay,pay_ZxCvBn0000006,0.00,5400000000006
+#2006,saanvi.iyer@example.in,paid,2026-08-04 10:05:44 +0530,fulfilled,INR,749.00,49.00,143.64,941.64,,0.00,2026-08-04 10:05:19 +0530,1,Cotton Socks - Grey,249.00,SOC-GRY,Razorpay,pay_ZxCvBn0000006,0.00,5400000000006
+#2007,arjun.menon@example.in,pending,,unfulfilled,INR,4498.00,0.00,809.64,5307.64,,0.00,2026-08-06 12:14:03 +0530,1,Yoga Mat - Purple,2249.00,MAT-PUR,Cash on Delivery,,0.00,5400000000007
+#2008,kavya.desai@example.in,wibble,2026-08-06 12:14:29 +0530,fulfilled,INR,199.00,49.00,44.64,292.64,,0.00,2026-08-06 12:14:03 +0530,1,Steel Straw,199.00,STR-STL,Razorpay,pay_ZxCvBn0000008,0.00,5400000000008
+#2009,rohan.bhat@example.in,paid,2026-08-07 07:58:16 +0530,fulfilled,USD,199.00,49.00,44.64,292.64,,0.00,2026-08-07 07:57:52 +0530,1,Steel Straw,199.00,STR-STL,Razorpay,pay_ZxCvBn0000009,0.00,5400000000009
+#2010,meera.krishnan@example.in,paid,2026-08-08 21:41:03 +0530,fulfilled,INR,15999.00,0.00,2879.82,18878.82,,0.00,2026-08-08 21:40:37 +0530,1,Office Chair, Mesh Back,15999.00,CHR-MSH,Razorpay,pay_ZxCvBn0000010,0.00,5400000000010
+#2011,neha.joshi@example.in,paid,2026-08-09 09:12:00 +0530,fulfilled,INR,-500.00,0.00,-90.00,-590.00,,0.00,2026-08-09 09:11:33 +0530,1,Gift Card Reversal,-500.00,GFT-REV,Razorpay,pay_ZxCvBn0000011,0.00,5400000000011
+#2012,sneha.rao@example.in,refunded,2026-08-10 18:30:00 +0530,fulfilled,INR,1299.00,49.00,242.64,1590.64,,0.00,2026-08-10 18:29:12 +0530,1,Leather Wallet - Tan,1299.00,WAL-TAN,Razorpay,pay_ZxCvBn0000012,1590.64,5400000000012

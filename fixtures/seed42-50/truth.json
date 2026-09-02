@@ -1,0 +1,391 @@
+{
+  "injected_defects": [
+    {
+      "affected_ids": [
+        "BL-0013",
+        "BL-0017"
+      ],
+      "defect_type": "ambiguous_unresolvable",
+      "resolvable": false
+    },
+    {
+      "affected_ids": [
+        "BL-0007",
+        "BL-0018"
+      ],
+      "defect_type": "split_settlement",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "BL-0003"
+      ],
+      "defect_type": "obfuscated_settlement_ref",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "rfnd_001084",
+        "ORD-004475"
+      ],
+      "defect_type": "cross_period_refund",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "pay_001085",
+        "pay_001046"
+      ],
+      "defect_type": "duplicate_psp_txn",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "pay_001076"
+      ],
+      "defect_type": "missing_order_ref",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "cb_001086"
+      ],
+      "defect_type": "chargeback_hold",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "BL-0015"
+      ],
+      "defect_type": "rounding_break",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "BL-0008"
+      ],
+      "defect_type": "garbled_narration",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "BL-0006",
+        "ORD-004482",
+        "ORD-004483"
+      ],
+      "defect_type": "many_to_one_batch",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "fee_001044",
+        "tax_001045"
+      ],
+      "defect_type": "fee_plus_gst",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "2026-01"
+      ],
+      "defect_type": "missing_gst_invoice",
+      "resolvable": true
+    },
+    {
+      "affected_ids": [
+        "2026-02"
+      ],
+      "defect_type": "under_invoiced_gst",
+      "resolvable": true
+    }
+  ],
+  "linkages": [
+    {
+      "bank_line_id": "BL-0002",
+      "order_ids": [
+        "ORD-004472"
+      ],
+      "psp_txn_ids": [
+        "fee_001003",
+        "pay_001002",
+        "tax_001004"
+      ],
+      "settlement_id": "setl_00001"
+    },
+    {
+      "bank_line_id": "BL-0003",
+      "order_ids": [
+        "ORD-004473"
+      ],
+      "psp_txn_ids": [
+        "fee_001006",
+        "pay_001005",
+        "tax_001007"
+      ],
+      "settlement_id": "setl_00002"
+    },
+    {
+      "bank_line_id": "BL-0004",
+      "order_ids": [
+        "ORD-004474",
+        "ORD-004475",
+        "ORD-004476",
+        "ORD-004477",
+        "ORD-004478",
+        "ORD-004479"
+      ],
+      "psp_txn_ids": [
+        "fee_001014",
+        "pay_001008",
+        "pay_001009",
+        "pay_001010",
+        "pay_001011",
+        "pay_001012",
+        "pay_001013",
+        "tax_001015"
+      ],
+      "settlement_id": "setl_00003"
+    },
+    {
+      "bank_line_id": "BL-0005",
+      "order_ids": [
+        "ORD-004475",
+        "ORD-004480",
+        "ORD-004481"
+      ],
+      "psp_txn_ids": [
+        "fee_001018",
+        "pay_001016",
+        "pay_001017",
+        "rfnd_001084",
+        "tax_001019"
+      ],
+      "settlement_id": "setl_00004"
+    },
+    {
+      "bank_line_id": "BL-0006",
+      "order_ids": [
+        "ORD-004482",
+        "ORD-004483"
+      ],
+      "psp_txn_ids": [
+        "fee_001022",
+        "pay_001020",
+        "pay_001021",
+        "tax_001023"
+      ],
+      "settlement_id": "setl_00005"
+    },
+    {
+      "bank_line_id": "BL-0007",
+      "order_ids": [
+        "ORD-004484",
+        "ORD-004485",
+        "ORD-004486",
+        "ORD-004487"
+      ],
+      "psp_txn_ids": [
+        "fee_001028",
+        "pay_001024",
+        "pay_001025",
+        "pay_001026",
+        "pay_001027",
+        "tax_001029"
+      ],
+      "settlement_id": "setl_00006"
+    },
+    {
+      "bank_line_id": "BL-0008",
+      "order_ids": [
+        "ORD-004488"
+      ],
+      "psp_txn_ids": [
+        "fee_001031",
+        "pay_001030",
+        "tax_001032"
+      ],
+      "settlement_id": "setl_00007"
+    },
+    {
+      "bank_line_id": "BL-0009",
+      "order_ids": [
+        "ORD-004489",
+        "ORD-004490",
+        "ORD-004491",
+        "ORD-004492",
+        "ORD-004493"
+      ],
+      "psp_txn_ids": [
+        "fee_001038",
+        "pay_001033",
+        "pay_001034",
+        "pay_001035",
+        "pay_001036",
+        "pay_001037",
+        "tax_001039"
+      ],
+      "settlement_id": "setl_00008"
+    },
+    {
+      "bank_line_id": "BL-0010",
+      "order_ids": [
+        "ORD-004494",
+        "ORD-004495",
+        "ORD-004496",
+        "ORD-004497"
+      ],
+      "psp_txn_ids": [
+        "fee_001044",
+        "pay_001040",
+        "pay_001041",
+        "pay_001042",
+        "pay_001043",
+        "tax_001045"
+      ],
+      "settlement_id": "setl_00009"
+    },
+    {
+      "bank_line_id": "BL-0011",
+      "order_ids": [
+        "ORD-004498",
+        "ORD-004499"
+      ],
+      "psp_txn_ids": [
+        "fee_001048",
+        "pay_001046",
+        "pay_001047",
+        "tax_001049"
+      ],
+      "settlement_id": "setl_00010"
+    },
+    {
+      "bank_line_id": "BL-0012",
+      "order_ids": [
+        "ORD-004500",
+        "ORD-004501",
+        "ORD-004502",
+        "ORD-004503",
+        "ORD-004504"
+      ],
+      "psp_txn_ids": [
+        "fee_001055",
+        "pay_001050",
+        "pay_001051",
+        "pay_001052",
+        "pay_001053",
+        "pay_001054",
+        "tax_001056"
+      ],
+      "settlement_id": "setl_00011"
+    },
+    {
+      "bank_line_id": "BL-0013",
+      "order_ids": [
+        "ORD-004519",
+        "ORD-004520",
+        "ORD-004521"
+      ],
+      "psp_txn_ids": [
+        "fee_001082",
+        "pay_001079",
+        "pay_001080",
+        "pay_001081",
+        "tax_001083"
+      ],
+      "settlement_id": "setl_00016"
+    },
+    {
+      "bank_line_id": "BL-0014",
+      "order_ids": [
+        "ORD-004509",
+        "ORD-004510"
+      ],
+      "psp_txn_ids": [
+        "cb_001086",
+        "fee_001065",
+        "pay_001063",
+        "pay_001064",
+        "tax_001066"
+      ],
+      "settlement_id": "setl_00013"
+    },
+    {
+      "bank_line_id": "BL-0015",
+      "order_ids": [
+        "ORD-004511",
+        "ORD-004512",
+        "ORD-004513",
+        "ORD-004514",
+        "ORD-004515"
+      ],
+      "psp_txn_ids": [
+        "fee_001072",
+        "pay_001067",
+        "pay_001068",
+        "pay_001069",
+        "pay_001070",
+        "pay_001071",
+        "tax_001073"
+      ],
+      "settlement_id": "setl_00014"
+    },
+    {
+      "bank_line_id": "BL-0016",
+      "order_ids": [
+        "ORD-004516",
+        "ORD-004517",
+        "ORD-004518"
+      ],
+      "psp_txn_ids": [
+        "fee_001077",
+        "pay_001074",
+        "pay_001075",
+        "pay_001076",
+        "tax_001078"
+      ],
+      "settlement_id": "setl_00015"
+    },
+    {
+      "bank_line_id": "BL-0017",
+      "order_ids": [
+        "ORD-004505",
+        "ORD-004506",
+        "ORD-004507",
+        "ORD-004508"
+      ],
+      "psp_txn_ids": [
+        "fee_001061",
+        "pay_001057",
+        "pay_001058",
+        "pay_001059",
+        "pay_001060",
+        "tax_001062"
+      ],
+      "settlement_id": "setl_00012"
+    },
+    {
+      "bank_line_id": "BL-0018",
+      "order_ids": [
+        "ORD-004484",
+        "ORD-004485",
+        "ORD-004486",
+        "ORD-004487"
+      ],
+      "psp_txn_ids": [
+        "fee_001028",
+        "pay_001024",
+        "pay_001025",
+        "pay_001026",
+        "pay_001027",
+        "tax_001029"
+      ],
+      "settlement_id": "setl_00006"
+    }
+  ],
+  "record_count": 50,
+  "seed": 42,
+  "unresolvable_ids": [
+    "BL-0013",
+    "BL-0017"
+  ]
+}

@@ -1,0 +1,45 @@
+# FIXTURE -- HAND-WRITTEN. Not produced by core/generator, and no code in
+# core/generator/ may be used to read, regenerate or validate it.
+# Source schema: Delhivery-style COD remittance CSV. FROM KNOWLEDGE, and the
+# least-verified layout on this branch: courier portals publish no export
+# schema at all, and the column names below are a plausible reconstruction
+# rather than a documented one. That is exactly why the adapter's column
+# mapping is a dict a caller can override rather than names baked into code.
+# See ADAPTERS-REPORT.md.
+#
+# ONE remittance -- one bank credit covering MANY COD orders minus courier
+# deductions. That is the same many-to-one-with-deductions shape a PSP
+# settlement has, which is why this file is emitted as PSPTransaction legs
+# sharing one settlement_id and reconciles with no engine change at all.
+#
+# WORKED EXAMPLE, hand-computed, in rupees. 6 COD orders and 1 remittance-level
+# deduction row:
+#
+#   COD collected   2499.00 + 1899.00 + 3499.00 + 999.00 + 12500.00 + 0.00
+#                 = 21396.00
+#   freight           45.00 +   45.00 +   65.00 +  45.00 +   120.00 + 45.00
+#                 =   365.00
+#   COD handling      37.49 +   28.49 +   52.49 +  14.99 +   187.50 +  0.00
+#                 =   320.96
+#   RTO                0.00 +    0.00 +    0.00 +   0.00 +     0.00 + 45.00
+#                     + 250.00 on the remittance-level row
+#                 =   295.00
+#   GST               14.85 +   13.23 +   21.15 +  10.80 +    55.35 + 16.20
+#                     +  45.00 on the remittance-level row
+#                 =   176.58
+#
+#   deductions      365.00 + 320.96 + 295.00 + 176.58 = 1157.54
+#   NET CREDIT      21396.00 - 1157.54 = 20238.46   (2023846 paise)
+#
+# 25 legs are emitted: 5 payment legs (waybill DL10000006 collected nothing,
+# and a zero is not a leg), 13 fee legs and 7 tax legs. They sum to exactly
+# 2023846 paise, and a test asserts that number against this comment.
+# Every leg carries settlement_id `setl_codDLVREM26081401`.
+Remittance Ref,UTR,Remittance Date,Waybill,Order ID,Row Type,Delivery Date,COD Amount,Freight Charge,COD Handling Fee,RTO Charge,GST
+DLV/REM/26081401,HDFCR52026081409,14-08-2026,DL10000001,ORD-004471,COD,10-08-2026,2499.00,45.00,37.49,0.00,14.85
+DLV/REM/26081401,HDFCR52026081409,14-08-2026,DL10000002,ORD-004472,COD,10-08-2026,1899.00,45.00,28.49,0.00,13.23
+DLV/REM/26081401,HDFCR52026081409,14-08-2026,DL10000003,ORD-004473,COD,11-08-2026,3499.00,65.00,52.49,0.00,21.15
+DLV/REM/26081401,HDFCR52026081409,14-08-2026,DL10000004,ORD-004474,COD,12-08-2026,999.00,45.00,14.99,0.00,10.80
+DLV/REM/26081401,HDFCR52026081409,14-08-2026,DL10000005,ORD-004475,COD,12-08-2026,"12,500.00",120.00,187.50,0.00,55.35
+DLV/REM/26081401,HDFCR52026081409,14-08-2026,DL10000006,ORD-004476,COD,13-08-2026,0.00,45.00,0.00,45.00,16.20
+DLV/REM/26081401,HDFCR52026081409,14-08-2026,,,DEDUCTION,,0.00,0.00,0.00,250.00,45.00

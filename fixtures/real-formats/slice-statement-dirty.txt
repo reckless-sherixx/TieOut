@@ -1,0 +1,40 @@
+# FIXTURE -- HAND-WRITTEN, DELIBERATELY DAMAGED. Not produced by
+# core/generator, and no code in core/generator/ may be used to read,
+# regenerate or validate it.
+# Source schema: Slice (small finance bank) PDF account statement, TEXT LAYER.
+# Same layout as slice-statement-clean.txt; every value is likewise INVENTED.
+#
+# Four defects, one of each kind this layout can suffer, and the expected
+# outcome of each:
+#   04 May  sub-paise amount (12.345)         -> BAD_DECIMAL, row terminated
+#   05 May  balance does not follow the chain -> ARITHMETIC_MISMATCH
+#   a bare reference-and-money line, no date  -> TRUNCATED_ROW (orphan)
+#   07 May  a row that never reaches a money pair before the page ends
+#                                             -> TRUNCATED_ROW (unterminated)
+# Plus a page header repeated MID-FILE, which must be skipped rather than read
+# as a row -- its first line begins with a date.
+#
+# Expected: 3 records, 4 quarantined, 5 skipped.
+01 May '25 - 31 May '25
+1/1
+slice small finance bank
+02 May '25 UPI-Debit-987654321101-Corner Store-EXBK0001111-cornerstore@ex
+amplebank
+1234567890123470 -₹100 ₹900
+03 May '25 UPI-Debit-987654321102-Corner Store-EXBK0001111-cornerstore@ex
+amplebank
+1234567890123471 -₹50 ₹850
+04 May '25 UPI-Debit-987654321103-Corner Store-EXBK0001111-cornerstore@ex
+amplebank
+1234567890123472 -₹12.345 ₹837.655
+05 May '25 UPI-Debit-987654321104-Corner Store-EXBK0001111-cornerstore@ex
+amplebank
+1234567890123473 -₹100 ₹700
+01 May '25 - 31 May '25
+1/1
+06 May '25 UPI-Credit-987654321105-Corner Store-EXBK0001111-cornerstore@e
+xamplebank
+1234567890123474 ₹300 ₹1,000
+1234567890123475 -₹25 ₹975
+07 May '25 UPI-Debit-987654321106-Corner Store-EXBK0001111-cornerstore@ex
+amplebank

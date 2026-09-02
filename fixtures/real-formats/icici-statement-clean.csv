@@ -1,0 +1,24 @@
+# FIXTURE -- HAND-WRITTEN. Not produced by core/generator, and no code in
+# core/generator/ may be used to read, regenerate or validate it.
+# Source schema: ICICI Bank account-statement export, retail net-banking layout.
+# THIS LAYOUT IS UNVERIFIED -- ICICI publishes no export schema and retail and
+# corporate net-banking produce different files. See ADAPTERS-REPORT.md.
+# Note the trailing space inside "(INR )": that quirk is real in some exports
+# and is exactly what header normalisation exists to absorb.
+# 12 data rows, running balance consistent line to line, zero expected
+# quarantine. Row 3 has a Value Date one day before its Transaction Date, so a
+# reader that grabbed the wrong column would be caught. The last line is an
+# overdraft, written the ICICI way: a Dr suffix on the balance.
+S No.,Value Date,Transaction Date,Cheque Number,Transaction Remarks,Withdrawal Amount (INR ),Deposit Amount (INR ),Balance (INR )
+1,01-08-2026,01-08-2026,,NEFT-N260803ICIC0000001-RAZORPAY SOFTWARE PVT LTD,0.00,71153.04,571153.04 Cr
+2,02-08-2026,02-08-2026,,UPI/260802123456/Payment to Swiggy,450.00,0.00,570703.04 Cr
+3,02-08-2026,03-08-2026,,NEFT-N260804ICIC0000002-RAZORPAY SOFTWARE PVT LTD,0.00,9568.68,580271.72 Cr
+4,04-08-2026,04-08-2026,,ATM CASH WDL MUMBAI 0001234,10000.00,0.00,570271.72 Cr
+5,05-08-2026,05-08-2026,,IMPS-260805123456-VENDOR PAYOUT,25500.50,0.00,544771.22 Cr
+6,06-08-2026,06-08-2026,,RTGS-ICICR52026080600123-SUPPLIER LTD,150000.00,0.00,394771.22 Cr
+7,07-08-2026,07-08-2026,,NEFT-N260807ICIC0000003-RAZORPAY SOFTWARE PVT LTD,0.00,45260.04,440031.26 Cr
+8,08-08-2026,08-08-2026,000123,CHEQUE PAID 000123,5000.00,0.00,435031.26 Cr
+9,09-08-2026,09-08-2026,,UPI/260809000098765/Amazon Pay,1299.00,0.00,433732.26 Cr
+10,10-08-2026,10-08-2026,,NEFT-N260810ICIC0000004-RAZORPAY SOFTWARE PVT LTD,0.00,7583.27,441315.53 Cr
+11,11-08-2026,11-08-2026,,BANK CHARGES GST 18 PCT,118.00,0.00,441197.53 Cr
+12,12-08-2026,12-08-2026,,EMI DEBIT LOAN00998877 UTR: ICIC260812000777,450000.00,0.00,8802.47 Dr

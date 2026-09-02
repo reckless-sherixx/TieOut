@@ -1,0 +1,350 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  /* The one accent colour. Everything that needs emphasis uses this and
+     nothing else -- see LANE-E-web.md §8. */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-subtle: var(--brand-subtle);
+
+  /* ---- The second neutral layer -------------------------------------
+     The original palette had exactly one neutral ground: --background and
+     --card are the same colour in light mode, so a panel is distinguished
+     only by its border. That is enough for two screens; it is not enough
+     for a console with a persistent top bar, a run header, a sub-navigation
+     rail and table headers, all of which need to read as chrome rather than
+     as content. --surface is that chrome layer. It is recessed from the
+     page in light and raised from it in dark, so in both themes it is the
+     layer you look past rather than at. */
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+
+  /* ---- State vocabulary ---------------------------------------------
+     Hover, active and selected as grounds rather than as ad-hoc opacity
+     modifiers. `bg-muted/50` was doing this job in three components at
+     three different strengths; these are one strength each, and the
+     selected ground is brand-derived so "current" reads as emphasis. */
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
+  --color-surface-selected: var(--surface-selected);
+  --color-skeleton: var(--skeleton);
+  --color-error-fg: var(--error-fg);
+  --color-error-surface: var(--error-surface);
+
+  /* ---- Outcome colours ----------------------------------------------
+     Three states this product argues about constantly: a subject the engine
+     matched, a subject it declined and itemised, and a hypothesis the
+     verifier refused. None of the three is an error -- METRICS.md is
+     explicit that a rejection is the guardrail firing and that an
+     unresolvable subject left unmatched is the correct answer -- so none of
+     them may be red.
+
+     They are derived from the accent, not picked: take the accent's hue
+     (256) and rotate it -60, +180 and +60; then re-fit lightness until each
+     measures the accent's own contrast on its own ground (4.9:1 on white,
+     6.8:1 on the dark page), with chroma capped BELOW the accent's so no
+     outcome can outshout the one emphasis colour. Every value below was
+     computed, not eyeballed. */
+  --color-matched: var(--matched);
+  --color-excepted: var(--excepted);
+  --color-rejected: var(--rejected);
+
+  /* ---- Outcome colours, as TEXT ---------------------------------------
+     The three above were fitted against white and are correct as fills,
+     borders and bars, where the floor is 3:1. As TEXT they sit on the state
+     layer -- a hovered row, an open row, a pressed chip -- and on a 10% wash
+     of themselves inside a pill. Measured on those real grounds they run
+     3.63:1 to 4.39:1 in light and 4.20:1 to 4.27:1 in dark, under the 4.5:1
+     floor for body text.
+
+     So the same split the palette already makes between --destructive (fill)
+     and --error-fg (text): the base keeps its fill job unchanged, and these
+     two are darker steps of the identical hue and chroma, re-fitted until the
+     WORST ground each is used on clears the floor rather than until white
+     does. --matched has no text variant because it is never text -- it is a
+     bar, a rail segment and an icon, all of which are judged at 3:1 and all
+     of which pass -- and an unused token is a token that will be misused. */
+  --color-excepted-fg: var(--excepted-fg);
+  --color-rejected-fg: var(--rejected-fg);
+
+  /* Tight type scale. Five steps, no more. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.6rem;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.9rem;
+  --text-2xl: 2rem;
+  --text-2xl--line-height: 2.25rem;
+  --text-3xl: 2.75rem;
+  --text-3xl--line-height: 2.9rem;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* One accent colour, used for every emphasis in the app: primary buttons,
+     focus rings, the tier bars, the netting diagram flow. */
+  --brand: oklch(0.55 0.17 256);
+  --brand-foreground: oklch(0.985 0 0);
+  --brand-subtle: oklch(0.955 0.022 256);
+
+  /* Chrome layer, recessed 0.024 L from the page. */
+  --surface: oklch(0.976 0 0);
+  --surface-foreground: oklch(0.145 0 0);
+  --surface-hover: oklch(0.962 0 0);
+  --surface-active: oklch(0.938 0 0);
+  --surface-selected: var(--brand-subtle);
+  --skeleton: oklch(0.945 0 0);
+
+  /* --destructive measures 4.76:1 on white but only 4.37:1 on the tinted
+     ground an error message actually sits on, which is under the floor. So
+     the error TEXT is a darker step of the same hue (5.53:1 on that ground)
+     and --destructive keeps its job as the fill and border colour. */
+  --error-fg: oklch(0.52 0.22 27.325);
+  --error-surface: oklch(0.972 0.014 27);
+
+  /* Accent hue 256 rotated -60 / +180 / +60, lightness re-fitted to the
+     accent's own 4.9:1 on white, chroma capped at 0.11 (accent: 0.17). */
+  --matched: oklch(0.537 0.084 196);
+  --excepted: oklch(0.551 0.107 76);
+  --rejected: oklch(0.56 0.11 316);
+
+  /* Worst ground for each is a 10% wash of itself over --surface-active,
+     where the base tokens measure 3.63:1. These measure 4.63:1 and 4.61:1
+     there, and 5.9:1 on the page. */
+  --excepted-fg: oklch(0.491 0.107 76);
+  --rejected-fg: oklch(0.5 0.11 316);
+
+  /* One number, so every disabled control agrees on how far it recedes. */
+  --disabled-opacity: 0.5;
+  /* The ground a focus ring clears against inside a dense table row. */
+  --ring-offset: oklch(1 0 0);
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  /* Was 0.556, then 0.54. The first fit covered --muted and --surface; the
+     state layer added in the same commit was not in it, and this token sits
+     on all of it. At 0.54 it measures 4.42:1 on --surface-selected -- the
+     ground of an OPEN table row, which is where the quiet cells of an
+     expanded derivation live -- and 4.19:1 on --surface-active. Both under
+     the floor. 0.519 measures 5.55 on the page, 5.17 on --surface, 4.95 on
+     --surface-hover, 4.87 on --surface-selected and 4.63 on --surface-active:
+     every ground it is used on, not only the pale ones. */
+  --muted-foreground: oklch(0.519 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.55 0.17 256);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --brand: oklch(0.68 0.15 256);
+  --brand-foreground: oklch(0.17 0.03 256);
+  --brand-subtle: oklch(0.29 0.06 256);
+
+  /* Chrome layer, raised 0.043 L from the page and held below --card, so
+     the stack reads page < chrome < panel in dark and page > chrome >
+     panel in light. The ordering inverts; the separation does not. */
+  --surface: oklch(0.188 0 0);
+  --surface-foreground: oklch(0.985 0 0);
+  --surface-hover: oklch(0.245 0 0);
+  --surface-active: oklch(0.285 0 0);
+  --surface-selected: var(--brand-subtle);
+  --skeleton: oklch(0.245 0 0);
+
+  --error-fg: oklch(0.75 0.16 22);
+  --error-surface: oklch(0.24 0.045 22);
+
+  /* Same rotation, re-fitted to the accent's 6.8:1 on the dark page,
+     chroma capped at 0.13 (accent: 0.15). */
+  --matched: oklch(0.666 0.105 196);
+  --excepted: oklch(0.683 0.13 76);
+  --rejected: oklch(0.692 0.13 316);
+
+  /* Same re-fit in dark, where the worst grounds are the RAISED ones --
+     --surface-active and --brand-subtle -- and the base tokens measure
+     4.27:1 and 4.20:1 on a wash of themselves over each. These measure
+     4.60:1 there. --muted-foreground needs no dark change: it measures
+     5.45:1 on its own worst ground already. */
+  --excepted-fg: oklch(0.705 0.13 76);
+  --rejected-fg: oklch(0.721 0.13 316);
+
+  --ring-offset: oklch(0.145 0 0);
+
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.68 0.15 256);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+    /* Money is integer paise rendered as fixed-width decimals; columns of it
+       only read as columns when the glyphs are the same width. */
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Amounts on the wire are integer paise (LANE-E-web.md §6). This class is the
+   visual contract for a formatted amount: monospaced digits, never wrapped. */
+@utility money {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+}
+
+/* The one keyboard-focus treatment. Every interactive element this app
+   authors uses it, so focus looks the same on a nav link, a table row and a
+   disclosure button. It is offset against --ring-offset rather than drawn
+   flush, because inside a dense table row a flush ring is indistinguishable
+   from the row border. */
+@utility focus-ring {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Loading. A skeleton stands in for content whose SHAPE is already known --
+   never for content whose existence is unknown, which is what the empty
+   states are for. */
+@utility skeleton {
+  background-color: var(--skeleton);
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Motion here only ever reports state, so a reader who has asked for less of
+   it loses nothing by having all of it removed. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

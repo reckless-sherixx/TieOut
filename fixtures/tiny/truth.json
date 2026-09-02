@@ -1,0 +1,97 @@
+{
+  "seed": 0,
+  "record_count": 12,
+  "linkages": [
+    {
+      "bank_line_id": "BL-0001",
+      "settlement_id": "setl_A1",
+      "psp_txn_ids": ["pay_1001", "pay_1002", "pay_1003", "pay_1004", "fee_1001", "tax_1001"],
+      "order_ids": ["ORD-004471", "ORD-004472", "ORD-004473", "ORD-004474"]
+    },
+    {
+      "bank_line_id": "BL-0002",
+      "settlement_id": "setl_B2",
+      "psp_txn_ids": ["pay_1101", "pay_1102", "rfnd_2001", "cb_7701", "fee_1002", "tax_1002"],
+      "order_ids": ["ORD-004510", "ORD-004511", "ORD-004472"]
+    },
+    {
+      "bank_line_id": "BL-0003",
+      "settlement_id": "setl_C3",
+      "psp_txn_ids": ["pay_1103", "pay_1104", "fee_1003", "tax_1003"],
+      "order_ids": ["ORD-004602", "ORD-004603"]
+    },
+    {
+      "bank_line_id": "BL-0004",
+      "settlement_id": "setl_D4",
+      "psp_txn_ids": ["pay_1201", "fee_1004", "tax_1004"],
+      "order_ids": ["ORD-004688"]
+    },
+    {
+      "bank_line_id": "BL-0005",
+      "settlement_id": "setl_M2",
+      "psp_txn_ids": ["pay_1401", "fee_1006", "tax_1006"],
+      "order_ids": ["ORD-004735"]
+    },
+    {
+      "bank_line_id": "BL-0006",
+      "settlement_id": "setl_K9",
+      "psp_txn_ids": ["pay_1301", "pay_1302", "fee_1005", "tax_1005"],
+      "order_ids": ["ORD-004720", "ORD-004721"]
+    }
+  ],
+  "injected_defects": [
+    {
+      "defect_type": "many_to_one_batch",
+      "affected_ids": ["BL-0001", "ORD-004471", "ORD-004472", "ORD-004473", "ORD-004474"],
+      "resolvable": true
+    },
+    {
+      "defect_type": "cross_period_refund",
+      "affected_ids": ["rfnd_2001", "ORD-004472"],
+      "resolvable": true
+    },
+    {
+      "defect_type": "fee_plus_gst",
+      "affected_ids": [
+        "fee_1001", "tax_1001",
+        "fee_1002", "tax_1002",
+        "fee_1003", "tax_1003",
+        "fee_1004", "tax_1004",
+        "fee_1005", "tax_1005",
+        "fee_1006", "tax_1006"
+      ],
+      "resolvable": true
+    },
+    {
+      "defect_type": "garbled_narration",
+      "affected_ids": ["BL-0003"],
+      "resolvable": true
+    },
+    {
+      "defect_type": "duplicate_psp_txn",
+      "affected_ids": ["pay_1105", "pay_1103"],
+      "resolvable": true
+    },
+    {
+      "defect_type": "rounding_break",
+      "affected_ids": ["BL-0004"],
+      "resolvable": true
+    },
+    {
+      "defect_type": "chargeback_hold",
+      "affected_ids": ["cb_7701"],
+      "resolvable": true
+    },
+    {
+      "defect_type": "missing_order_ref",
+      "affected_ids": ["pay_1104"],
+      "resolvable": true
+    },
+    {
+      "defect_type": "ambiguous_unresolvable",
+      "affected_ids": ["BL-0005", "BL-0006"],
+      "resolvable": false
+    }
+  ],
+  "unresolvable_ids": ["BL-0005", "BL-0006"]
+}

@@ -1,0 +1,22 @@
+# FIXTURE -- HAND-WRITTEN. Not produced by core/generator, and no code in
+# core/generator/ may be used to read, regenerate or validate it. That
+# independence is the whole point: a generator cannot validate the adapter that
+# reads a format the generator does not emit.
+# Source schema: Razorpay settlement recon report, per-transaction layout.
+# Field list verified against https://razorpay.com/docs/api/settlements/fetch-recon/
+# The dashboard EXPORT spellings ("fee (exclusive tax)", rupee decimals, human
+# timestamps) are from knowledge and UNVERIFIED -- see ADAPTERS-REPORT.md.
+# 12 data rows, 2 settlement batches, zero expected quarantine.
+entity_id,type,debit,credit,amount,currency,fee (exclusive tax),tax,on_hold,settled,created_at,settled_at,settlement_id,settlement_utr,order_id,order_receipt,payment_id,method
+pay_RZP0000000001,payment,0.00,9721.57,10000.05,INR,236.00,42.48,N,Y,2026-08-01 09:14:22,2026-08-03,setl_RZ2608030001,260803HDFC0000001,order_RZO000000001,ORD-004471,pay_RZP0000000001,upi
+pay_RZP0000000002,payment,0.00,45260.04,46556.54,INR,1098.73,197.77,N,Y,2026-08-01 11:02:05,2026-08-03,setl_RZ2608030001,260803HDFC0000001,order_RZO000000002,ORD-004472,pay_RZP0000000002,netbanking
+pay_RZP0000000003,payment,0.00,1215.19,1250.00,INR,29.50,5.31,N,Y,2026-08-01 13:47:51,2026-08-03,setl_RZ2608030001,260803HDFC0000001,order_RZO000000003,ORD-004473,pay_RZP0000000003,card
+pay_RZP0000000004,payment,0.00,873.96,899.00,INR,21.22,3.82,N,Y,2026-08-01 16:20:09,2026-08-03,setl_RZ2608030001,260803HDFC0000001,order_RZO000000004,ORD-004474,pay_RZP0000000004,upi
+rfnd_RZR000000001,refund,500.00,0.00,500.00,INR,0.00,0.00,N,Y,2026-08-02 10:05:33,2026-08-03,setl_RZ2608030001,260803HDFC0000001,order_RZO000000003,ORD-004473,pay_RZP0000000003,card
+pay_RZP0000000005,payment,0.00,14582.28,15000.00,INR,354.00,63.72,N,Y,2026-08-02 12:31:44,2026-08-03,setl_RZ2608030001,260803HDFC0000001,order_RZO000000005,ORD-004475,pay_RZP0000000005,netbanking
+adj_RZA000000001,adjustment,120.00,0.00,120.00,INR,0.00,0.00,N,Y,2026-08-03 08:00:00,2026-08-04,setl_RZ2608040002,260804HDFC0000002,,,,
+pay_RZP0000000006,payment,0.00,2430.37,2499.99,INR,59.00,10.62,N,Y,2026-08-03 09:55:12,2026-08-04,setl_RZ2608040002,260804HDFC0000002,order_RZO000000006,ORD-004476,pay_RZP0000000006,upi
+rfnd_RZR000000002,refund,899.00,0.00,899.00,INR,0.00,0.00,N,Y,2026-08-03 14:12:00,2026-08-04,setl_RZ2608040002,260804HDFC0000002,order_RZO000000004,ORD-004474,pay_RZP0000000004,upi
+pay_RZP0000000007,payment,0.00,7583.27,7800.50,INR,184.09,33.14,N,Y,2026-08-03 15:40:26,2026-08-04,setl_RZ2608040002,260804HDFC0000002,order_RZO000000007,ORD-004477,pay_RZP0000000007,card
+adj_RZA000000002,adjustment,0.00,250.00,250.00,INR,0.00,0.00,N,Y,2026-08-03 17:00:00,2026-08-04,setl_RZ2608040002,260804HDFC0000002,,,,
+pay_RZP0000000008,payment,0.00,324.04,333.33,INR,7.87,1.42,N,Y,2026-08-03 18:45:59,2026-08-04,setl_RZ2608040002,260804HDFC0000002,order_RZO000000008,ORD-004478,pay_RZP0000000008,wallet
