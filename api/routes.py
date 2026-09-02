@@ -30,7 +30,7 @@ from fastapi import (
     Query,
     UploadFile,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from core.drift.compare import compare
@@ -311,6 +311,60 @@ def get_run(id: str, repo: RepoDep) -> dict:
         update={"tier_confidence": tier_confidence_map(repo.all_matches(id))}
     )
     return enriched.model_dump(mode="json")
+
+
+@router.get(
+    "/api/runs/{id}/report.pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}},
+    tags=["runs"],
+)
+def get_run_report(id: str, repo: RepoDep) -> Response:
+    """The run as a document that survives leaving this app.
+
+    The console shows the answer; this defends it. Everything the pages stopped
+    printing -- the derivations, the denominators, what each rung requires, the
+    standing limits -- lives here, so a finance team can file one PDF with a
+    month-end close instead of screenshotting six tabs.
+
+    Exceptions are PAGED THROUGH rather than fetched whole. `exceptions_page`
+    is the only accessor, and a run with 5,000 exceptions must not become one
+    unbounded query because a report wanted convenience.
+    """
+    summary = repo.summary(id)
+    if summary is None:
+        raise HTTPException(status_code=404, detail=f"no run with id {id!r}")
+
+    summary = summary.model_copy(
+        update={"tier_confidence": tier_confidence_map(repo.all_matches(id))}
+    )
+
+    exceptions: list = []
+    page = 1
+    while True:
+        chunk = repo.exceptions_page(id, page=page, size=500)
+        exceptions.extend(chunk.items)
+        if len(exceptions) >= chunk.total or not chunk.items:
+            break
+        page += 1
+
+    from report import build_report
+
+    pdf = build_report(
+        summary,
+        matches=repo.all_matches(id),
+        exceptions=exceptions,
+    )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            # `inline` rather than `attachment`: a reviewer clicking this in the
+            # console should see the document, not a file in their downloads
+            # folder. The filename still applies when they choose to save it.
+            "Content-Disposition": f'inline; filename="tieout-{id}.pdf"',
+        },
+    )
 
 
 @router.get("/api/runs/{id}/status", response_model=None, tags=["runs"])
