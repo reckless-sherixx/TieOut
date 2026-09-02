@@ -173,7 +173,7 @@ function DriftFailure({
     return (
       <section
         aria-labelledby="not-comparable-heading"
-        className="max-w-[72ch] space-y-4 rounded-xl border border-border bg-surface px-6 py-5"
+        className="max-w-[72ch] space-y-4 brut bg-surface px-6 py-5"
       >
         <div className="flex items-start gap-3">
           <ScaleIcon

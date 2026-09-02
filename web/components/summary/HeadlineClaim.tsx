@@ -100,7 +100,7 @@ export function HeadlineClaim({
       <div
         id={panelId}
         className={cn(
-          "mt-6 overflow-hidden rounded-xl border border-border bg-card",
+          "mt-6 overflow-hidden brut bg-card",
           open === null && "hidden",
         )}
       >

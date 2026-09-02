@@ -4,20 +4,25 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  // Every button is a block with an ink border and a hard offset shadow, and
+  // the press is the surface travelling into that shadow. The old
+  // `translate-y-px` nudge is gone: two competing press affordances read as a
+  // bug. `brut-press` owns hover, active and reduced-motion in globals.css.
+  "group/button brut-press inline-flex shrink-0 items-center justify-center border-[length:var(--border-w)] border-[var(--ink)] bg-clip-padding text-sm font-semibold whitespace-nowrap outline-none select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
-        outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+        default: "bg-primary text-primary-foreground",
+        outline: "bg-background text-foreground",
+        secondary: "bg-surface text-surface-foreground",
+        // The one variant without a block: used inside dense rows where a
+        // shadow per row would be noise rather than depth.
         ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
-        destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
+          "border-transparent shadow-none hover:bg-muted hover:text-foreground aria-expanded:bg-muted",
+        destructive: "bg-error-surface text-error-fg",
+        // Not a block, and not the amber fill: link text uses --brand-strong,
+        // the 5.14:1 refit, because --brand itself is 1.99:1 as text.
+        link: "border-transparent shadow-none text-[var(--brand-strong)] underline underline-offset-4",
       },
       size: {
         default:

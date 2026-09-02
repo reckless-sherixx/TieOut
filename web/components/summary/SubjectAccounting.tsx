@@ -223,7 +223,7 @@ function BankLineReconciliation({ run }: { run: RunSummary }) {
   );
 
   return (
-    <div className="max-w-[72ch] rounded-xl border border-border bg-surface px-5 py-4">
+    <div className="max-w-[72ch] brut bg-surface px-5 py-4">
       <p className="text-xs font-medium">The same run, counted in bank lines</p>
 
       {error ? (

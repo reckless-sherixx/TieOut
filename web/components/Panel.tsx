@@ -13,7 +13,7 @@ export function Panel({
   return (
     <section
       className={cn(
-        "rounded-xl border border-border bg-card text-card-foreground",
+        "brut bg-card text-card-foreground",
         className,
       )}
       {...props}
