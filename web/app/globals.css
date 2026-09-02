@@ -344,7 +344,7 @@
    flush, because inside a dense table row a flush ring is indistinguishable
    from the row border. */
 @utility focus-ring {
-  outline: 2px solid var(--ring);
+  outline: var(--border-w) solid var(--ring);
   outline-offset: 2px;
 }
 
@@ -421,12 +421,12 @@
   translate: 4px 4px;
 }
 
-/* Focus is a second ring outside the border, so it is visible against both the
-   page and the amber fill -- an inset ring would disappear into either. */
-.focus-ring:focus-visible,
+/* Focus sits OUTSIDE the border so it clears both the page and the amber
+   fill; an inset ring would vanish into either. The `focus-ring` utility above
+   already carries the same rule for elements that opt in by class. */
 .brut:focus-visible,
 .brut-press:focus-visible {
-  outline: var(--border-w) solid var(--ink);
+  outline: var(--border-w) solid var(--ring);
   outline-offset: 2px;
 }
 

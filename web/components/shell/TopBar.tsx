@@ -30,7 +30,7 @@ export function TopBar() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-surface text-surface-foreground">
+    <header className="sticky top-0 z-40 border-b-[length:var(--border-w)] border-[var(--ink)] bg-surface text-surface-foreground">
       {/* THE GAP SHRINKS BEFORE THE BAR DOES. A third destination pushed the
           theme toggle 12 px past the right edge at 375 and gave the whole
           console a horizontally scrolling page -- the one layout rule this
@@ -40,7 +40,7 @@ export function TopBar() {
       <div className="mx-auto flex h-13 w-full max-w-[92rem] items-center gap-4 px-4 sm:gap-8 sm:px-6 lg:px-8">
         <Link
           href="/"
-          className="flex shrink-0 items-center gap-2.5 rounded-sm text-sm font-medium tracking-tight focus-visible:focus-ring"
+          className="flex shrink-0 items-center gap-2.5 text-base font-bold tracking-tight uppercase focus-visible:focus-ring"
         >
           <Mark />
           Tieout
@@ -55,11 +55,11 @@ export function TopBar() {
                 href={d.href}
                 aria-current={current ? "page" : undefined}
                 className={cn(
-                  "rounded-md px-2 py-1 text-xs whitespace-nowrap transition-colors duration-150 sm:px-2.5",
+                  "border-2 px-2 py-1 text-xs font-semibold whitespace-nowrap sm:px-2.5",
                   "focus-visible:focus-ring",
                   current
-                    ? "bg-surface-selected text-foreground"
-                    : "text-muted-foreground hover:bg-surface-hover hover:text-foreground active:bg-surface-active",
+                    ? "border-[var(--ink)] bg-primary text-primary-foreground"
+                    : "border-transparent text-muted-foreground hover:border-[var(--ink)] hover:text-foreground",
                 )}
               >
                 {d.label}
