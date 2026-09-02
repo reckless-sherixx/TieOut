@@ -252,20 +252,38 @@ function Quarantine({
           Nothing was quarantined
         </h3>
         <p className="max-w-prose text-xs leading-relaxed text-muted-foreground">
-          {upload.state === "empty" ? (
-            <>
-              The header was recognised and there were no data rows after it, so
-              there was nothing to refuse. This is a file with nothing in it
-              rather than a file full of problems — check the date range on the
-              export.
-            </>
-          ) : (
-            <>
-              Every row of this file became a canonical record. A malformed row
-              would appear here with its raw text and line number; there are
-              none.
-            </>
-          )}
+          Every row of this file became a canonical record. A malformed row
+          would appear here with its raw text and line number; there are none.
+        </p>
+      </section>
+    );
+  }
+
+  // An accepted file that produced nothing is now ONE quarantine row carrying
+  // EMPTY_DOCUMENT, rather than an `empty` upload state -- the state collapsed
+  // when the ingest boundary started refusing to return silently. The
+  // distinction the old state carried still matters to a merchant, so it is
+  // read off the reason code here instead: "this file had nothing in it" and
+  // "this file was full of problems" are different things to be told.
+  const emptyDocument =
+    upload.quarantine_count === 1 &&
+    upload.record_count === 0 &&
+    rows.length === 1 &&
+    rows[0]?.reason === "EMPTY_DOCUMENT";
+
+  if (emptyDocument) {
+    return (
+      <section aria-labelledby="quarantine-heading" className="space-y-2">
+        <h3 id="quarantine-heading" className="text-xs font-medium">
+          This file had nothing in it
+        </h3>
+        <p className="max-w-prose text-xs leading-relaxed text-muted-foreground">
+          The format was recognised and no transaction rows followed, so there
+          was nothing to refuse and nothing to reconcile. That is a file with
+          nothing in it rather than a file full of problems — check the date
+          range on the export. It is reported rather than passed over, because
+          an ingest that succeeded silently is indistinguishable from one that
+          worked.
         </p>
       </section>
     );

@@ -564,7 +564,7 @@ export interface components {
             recall_on_resolvable: number;
             trap_capture_rate: number;
             /** @description The denominator trap_capture_rate divided by — the count of subjects this dataset deliberately does not determine. It is 2 at 50 records and 10 at 500, and without it "100.0%" of 2 renders exactly like "100.0%" of 100. Null on a run stored before this field existed, which means "not recorded" and never "zero traps". */
-            total_traps?: number | null;
+            total_traps: number | null;
             llm_rejection_rate: number;
             throughput_records_per_sec: number;
             /** @description USD per 100 records. Not a paise field — this is a dollar cost metric. */
@@ -600,13 +600,13 @@ export interface components {
              * @description The confidence the engine stamped on this run's matches, per tier. Derived from the run's own MatchGroup rows, never from a table: the console previously carried a hardcoded copy of these values and it drifted, rendering the word "verified" on the LLM rung where the engine stamps 0.70.
              *     Present on an UNSCORED run too — a run over uploaded files has matches and tiers even though it has no metrics — which is why it sits here and not inside Metrics. All five keys are always present, for the same reason tier_counts carries all five.
              */
-            tier_confidence?: {
+            tier_confidence: {
                 T0: components["schemas"]["TierConfidence"];
                 T1: components["schemas"]["TierConfidence"];
                 T2: components["schemas"]["TierConfidence"];
                 T3: components["schemas"]["TierConfidence"];
                 LLM: components["schemas"]["TierConfidence"];
-            };
+            } | null;
             run_id: string;
             seed: number;
             record_count: number;
@@ -875,7 +875,7 @@ export interface components {
          * @description Why a row (or a file) could not become a canonical record. These strings are stable and machine-readable — the quarantine review screen groups by them — and mirror core/adapters/base.py:QuarantineReason.
          * @enum {string}
          */
-        QuarantineReason: "BAD_DECIMAL" | "BAD_DATE" | "MISSING_VALUE" | "TRUNCATED_ROW" | "EXTRA_FIELDS" | "DUPLICATE_ROW" | "UNKNOWN_VALUE" | "UNSUPPORTED_ROW_TYPE" | "AMBIGUOUS_DIRECTION" | "ARITHMETIC_MISMATCH" | "SCHEMA_VIOLATION" | "UNDECODABLE_FILE" | "MISSING_HEADER_COLUMN" | "UNRECOGNISED_FORMAT";
+        QuarantineReason: "BAD_DECIMAL" | "BAD_DATE" | "MISSING_VALUE" | "TRUNCATED_ROW" | "EXTRA_FIELDS" | "DUPLICATE_ROW" | "UNKNOWN_VALUE" | "UNSUPPORTED_ROW_TYPE" | "AMBIGUOUS_DIRECTION" | "ARITHMETIC_MISMATCH" | "SCHEMA_VIOLATION" | "UNDECODABLE_FILE" | "MISSING_HEADER_COLUMN" | "UNRECOGNISED_FORMAT" | "EMPTY_DOCUMENT" | "NOT_A_STATEMENT";
         /** @description One page of quarantined rows, ordered by line number then by insertion order — a total ordering, so page 2 can never repeat a row from page 1. */
         PaginatedQuarantine: WithRequired<components["schemas"]["Pagination"], "total" | "page" | "size"> & {
             items: components["schemas"]["QuarantinedRow"][];

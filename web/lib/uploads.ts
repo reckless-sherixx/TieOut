@@ -159,6 +159,11 @@ export const QUARANTINE_REASON: Record<QuarantineReason, string> = {
   SCHEMA_VIOLATION: "The values were rejected by the canonical model",
   UNDECODABLE_FILE: "No supported encoding decoded the bytes",
   MISSING_HEADER_COLUMN: "The header is missing a column this layout needs",
+  // File-level, not row-level: an accepted file that produced no records at
+  // all. Reported rather than passed over, because an ingest that succeeded
+  // silently is indistinguishable from one that worked.
+  EMPTY_DOCUMENT: "The format was recognised and no transaction rows followed",
+  NOT_A_STATEMENT: "Recognised as this format but no readable structure found",
   UNRECOGNISED_FORMAT: "No adapter recognised this file",
 };
 

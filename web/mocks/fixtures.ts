@@ -35,6 +35,23 @@ import type {
  * ------------------------------------------------------------------ */
 
 /** mulberry32 -- tiny, fast, and stable across runs. */
+/**
+ * The confidence the engine stamps per tier, measured on a live run
+ * 2026-09-02: T0 1.00, T1 0.95, T2 0.99, T3 0.80, LLM 0.70.
+ *
+ * Hardcoded HERE and nowhere else. A mock that invented different figures
+ * would let the console look correct against fiction and wrong against the
+ * API -- which is the exact defect this field was added to fix, when
+ * `lib/tiers.ts` carried a table saying "verified" for the engine's 0.70.
+ */
+const TIER_CONFIDENCE = {
+  T0: { confidence_observed: 1.0, confidence_conflict: false },
+  T1: { confidence_observed: 0.95, confidence_conflict: false },
+  T2: { confidence_observed: 0.99, confidence_conflict: false },
+  T3: { confidence_observed: 0.8, confidence_conflict: false },
+  LLM: { confidence_observed: 0.7, confidence_conflict: false },
+};
+
 function prng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -165,7 +182,8 @@ function metrics(m: MetricsInput): Metrics {
     false_match_rate: 0,
     precision: 0,
     recall_on_resolvable: 0,
-    trap_capture_rate: 0,
+    total_traps: 10,
+  trap_capture_rate: 0,
     llm_rejection_rate: 0,
     throughput_records_per_sec: 0,
     llm_cost_usd_per_100: 0,
@@ -236,6 +254,7 @@ function seedRuns(): RunRecord[] {
         created_at: hoursBeforeBoot(bootedAt, 4.8),
         match_count: totalMatches(fiveThousand),
         exception_count: 47,
+        tier_confidence: TIER_CONFIDENCE,
         metrics: metrics({
           auto_match_rate: 0.9418,
           assisted_match_rate: 0.0488,
@@ -267,6 +286,7 @@ function seedRuns(): RunRecord[] {
         created_at: hoursBeforeBoot(bootedAt, 7.2),
         match_count: totalMatches(fiftyThousand),
         exception_count: 5000,
+        tier_confidence: TIER_CONFIDENCE,
         metrics: metrics({
           auto_match_rate: 0.8712,
           assisted_match_rate: 0.0288,
@@ -300,6 +320,7 @@ function seedRuns(): RunRecord[] {
         created_at: new Date(bootedAt).toISOString(),
         match_count: 0,
         exception_count: 0,
+        tier_confidence: TIER_CONFIDENCE,
         // Still executing: no metrics yet. Rendering 0% here would be a lie.
         metrics: null,
       },
@@ -334,6 +355,7 @@ function seedRuns(): RunRecord[] {
         created_at: hoursBeforeBoot(bootedAt, 21),
         match_count: totalMatches(fifty),
         exception_count: 3,
+        tier_confidence: TIER_CONFIDENCE,
         metrics: metrics({
           auto_match_rate: 0.94,
           assisted_match_rate: 0.0,
@@ -375,6 +397,7 @@ function seedRuns(): RunRecord[] {
         created_at: hoursBeforeBoot(bootedAt, 12.4),
         match_count: totalMatches(fiveHundred),
         exception_count: 20,
+        tier_confidence: TIER_CONFIDENCE,
         metrics: metrics({
           auto_match_rate: 0.9379,
           assisted_match_rate: 0.0,
@@ -407,6 +430,7 @@ function seedRuns(): RunRecord[] {
         created_at: hoursBeforeBoot(bootedAt, 22.6),
         match_count: 0,
         exception_count: 0,
+        tier_confidence: TIER_CONFIDENCE,
         metrics: null,
       },
       startedAt: null,
@@ -543,6 +567,7 @@ export function createRun(useLlm: boolean, seed: number, recordCount: number): s
       created_at: new Date().toISOString(),
       match_count: 0,
       exception_count: 0,
+      tier_confidence: TIER_CONFIDENCE,
       metrics: null,
     },
     startedAt: Date.now(),
@@ -596,6 +621,7 @@ export function createUploadRun(useLlm: boolean, recordCount: number): string {
       created_at: new Date().toISOString(),
       match_count: 0,
       exception_count: 0,
+      tier_confidence: TIER_CONFIDENCE,
       metrics: null,
     },
     startedAt: Date.now(),
