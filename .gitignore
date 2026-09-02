@@ -28,3 +28,6 @@ fixtures/seed42-5000/
 .claude/
 CLAUDE.md
 **/CLAUDE.md
+
+# Working docs: the published repo carries only README and ARCHITECTURE.
+docs/
