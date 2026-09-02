@@ -34,7 +34,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from core.drift.compare import compare
-from core.models import MatchGroup, ReasonCode
+from core.models import MatchGroup, ReasonCode, TierConfidence
 from core.store.repo import RecordSource, Repo
 
 from api import settings
@@ -263,7 +263,7 @@ _TIER_KEYS = ("T0", "T1", "T2", "T3", "LLM")
 
 def tier_confidence_map(
     matches: Sequence[MatchGroup],
-) -> dict[str, dict[str, float | bool | None]]:
+) -> dict[str, TierConfidence]:
     """The confidence the engine stamped, per tier, for THIS run.
 
     Derived from the matches rather than read off a table, so a change in the
@@ -280,13 +280,13 @@ def tier_confidence_map(
         if match.tier in seen:
             seen[match.tier].add(match.confidence)
 
-    out: dict[str, dict[str, float | bool | None]] = {}
+    out: dict[str, TierConfidence] = {}
     for key in _TIER_KEYS:
         values = seen[key]
-        out[key] = {
-            "confidence_observed": next(iter(values)) if len(values) == 1 else None,
-            "confidence_conflict": len(values) > 1,
-        }
+        out[key] = TierConfidence(
+            confidence_observed=next(iter(values)) if len(values) == 1 else None,
+            confidence_conflict=len(values) > 1,
+        )
     return out
 
 
@@ -298,12 +298,19 @@ def get_run(id: str, repo: RepoDep) -> dict:
     summary = repo.summary(id)
     if summary is None:
         raise HTTPException(status_code=404, detail=f"no run with id {id!r}")
-    body = summary.model_dump(mode="json")
-    # Derived here rather than stored, so it is always this run's own figure.
-    # The console used to carry a hardcoded table instead and it drifted --
-    # rendering "verified" on the rung where the engine stamps 0.70.
-    body["tier_confidence"] = tier_confidence_map(repo.all_matches(id))
-    return body
+    # Set on the MODEL, not on the dumped dict: `RunSummary` and
+    # `api/openapi.yaml` are held to each other by
+    # `tests/test_models.py::test_openapi_mirrors_the_pydantic_model`, and a key
+    # that exists only on the response would pass every test here while making
+    # the published contract a lie.
+    #
+    # Derived per request rather than stored, so it is always this run's own
+    # figure. The console used to carry a hardcoded table instead and it
+    # drifted -- rendering "verified" on the rung where the engine stamps 0.70.
+    enriched = summary.model_copy(
+        update={"tier_confidence": tier_confidence_map(repo.all_matches(id))}
+    )
+    return enriched.model_dump(mode="json")
 
 
 @router.get("/api/runs/{id}/status", response_model=None, tags=["runs"])

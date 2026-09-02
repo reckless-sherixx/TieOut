@@ -48,6 +48,15 @@ FIXTURES = REPO_ROOT / "fixtures"
 
 SCALES = (50, 500, 5000)
 
+#: Fields present in `Metrics` today but absent from the captured baselines,
+#: each one a deliberate addition rather than a metric that moved.
+#:
+#: * ``total_traps`` (2026-09-02) -- not a new metric but the denominator
+#:   ``trap_capture_rate`` already divided by, promoted onto the wire so the
+#:   console can render "100.0% (10 of 10 traps)". At 50 records that
+#:   denominator is 2, and `100.0%` of 2 renders identically to `100.0%` of 100.
+FIELDS_ADDED_SINCE_BASELINE = frozenset({"total_traps"})
+
 
 @pytest.mark.parametrize("records", SCALES)
 def test_every_metric_is_byte_identical_to_the_pre_optimisation_capture(records):
@@ -61,7 +70,31 @@ def test_every_metric_is_byte_identical_to_the_pre_optimisation_capture(records)
     # Metrics first and on its own: it is the acceptance criterion, and a
     # failure here should say so rather than being buried in a dict diff of the
     # whole capture.
-    assert actual["metrics"] == expected["metrics"]
+    #
+    # Compared KEY BY KEY against the baseline's own keys, not as a whole-dict
+    # equality, so that a field ADDED to `Metrics` after the capture does not
+    # read as a metric that moved. Regenerating the baseline would have been the
+    # easy fix and the wrong one: it would relabel every future change as
+    # intentional too, and this guard's entire value is that it cannot be
+    # satisfied by re-recording the thing it judges.
+    for key, was in expected["metrics"].items():
+        assert actual["metrics"][key] == was, (
+            f"{key} moved: baseline {was!r}, now {actual['metrics'][key]!r}. "
+            "The optimisation was accepted on the condition that no metric "
+            "changes at any scale."
+        )
+
+    # And any key the baseline does not have must be one somebody deliberately
+    # added. An unlisted new key fails, because "a field appeared" and "the
+    # engine started reporting something new without anyone noticing" look
+    # identical from here.
+    appeared = set(actual["metrics"]) - set(expected["metrics"])
+    assert appeared <= FIELDS_ADDED_SINCE_BASELINE, (
+        f"{sorted(appeared - FIELDS_ADDED_SINCE_BASELINE)} appeared in Metrics "
+        "since the baseline was captured and is not recorded as a deliberate "
+        "addition. Add it to FIELDS_ADDED_SINCE_BASELINE with the reason, or "
+        "find out why the engine grew a field nobody asked for."
+    )
     assert actual["tier_walk"] == expected["tier_walk"]
     assert actual["exception_walk"] == expected["exception_walk"]
     assert actual["explain"] == expected["explain"]
@@ -69,7 +102,11 @@ def test_every_metric_is_byte_identical_to_the_pre_optimisation_capture(records)
         "matches, exceptions or the audit trail changed even though every "
         "metric held -- the numbers survived but the argument behind them did not"
     )
-    assert actual == expected
+    # The remaining sections are still compared whole -- only `metrics` has a
+    # schema that grows.
+    assert {k: v for k, v in actual.items() if k != "metrics"} == {
+        k: v for k, v in expected.items() if k != "metrics"
+    }
 
 
 def test_the_baseline_is_not_empty_at_any_scale():

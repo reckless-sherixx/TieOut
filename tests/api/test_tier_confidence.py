@@ -15,7 +15,7 @@ Nothing tested the two against each other, so nothing caught it. This file is
 that test.
 """
 
-from core.models import MatchGroup
+from core.models import MatchGroup, TierConfidence
 
 
 def _match(tier: str, confidence: float, n: int) -> MatchGroup:
@@ -49,8 +49,8 @@ def test_a_tier_reports_the_confidence_the_engine_stamped():
     matches = [_match("T0", 1.0, 1), _match("T0", 1.0, 2), _match("LLM", 0.7, 3)]
     got = tier_confidence_map(matches)
 
-    assert got["T0"] == {"confidence_observed": 1.0, "confidence_conflict": False}
-    assert got["LLM"] == {"confidence_observed": 0.7, "confidence_conflict": False}
+    assert got["T0"] == TierConfidence(confidence_observed=1.0, confidence_conflict=False)
+    assert got["LLM"] == TierConfidence(confidence_observed=0.7, confidence_conflict=False)
 
 
 def test_a_tier_with_no_matches_reports_null_not_a_default():
@@ -62,7 +62,7 @@ def test_a_tier_with_no_matches_reports_null_not_a_default():
     from api.routes import tier_confidence_map
 
     got = tier_confidence_map([_match("T0", 1.0, 1)])
-    assert got["T1"] == {"confidence_observed": None, "confidence_conflict": False}
+    assert got["T1"] == TierConfidence(confidence_observed=None, confidence_conflict=False)
 
 
 def test_two_confidences_on_one_tier_refuse_to_collapse():
@@ -74,7 +74,7 @@ def test_two_confidences_on_one_tier_refuse_to_collapse():
     from api.routes import tier_confidence_map
 
     got = tier_confidence_map([_match("T3", 0.8, 1), _match("T3", 0.75, 2)])
-    assert got["T3"] == {"confidence_observed": None, "confidence_conflict": True}
+    assert got["T3"] == TierConfidence(confidence_observed=None, confidence_conflict=True)
 
 
 def test_a_conflict_is_distinguishable_from_an_absence():
@@ -86,8 +86,8 @@ def test_a_conflict_is_distinguishable_from_an_absence():
     from api.routes import tier_confidence_map
 
     got = tier_confidence_map([_match("T3", 0.8, 1), _match("T3", 0.75, 2)])
-    assert got["T3"]["confidence_conflict"] is True
-    assert got["T1"]["confidence_conflict"] is False
+    assert got["T3"].confidence_conflict is True
+    assert got["T1"].confidence_conflict is False
 
 
 def test_every_tier_key_is_always_present():
@@ -96,4 +96,4 @@ def test_every_tier_key_is_always_present():
 
     got = tier_confidence_map([])
     assert set(got) == {"T0", "T1", "T2", "T3", "LLM"}
-    assert all(v["confidence_observed"] is None for v in got.values())
+    assert all(v.confidence_observed is None for v in got.values())

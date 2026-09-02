@@ -1165,8 +1165,9 @@ components:
       additionalProperties: false
       properties:
         confidence_observed:
-          type: number
-          nullable: true
+          anyOf:
+            - type: number
+            - type: "null"
           description: >
             The single confidence every match from this tier carried. Null when
             the tier produced no matches, and null when it produced matches at
@@ -1196,6 +1197,7 @@ components:
         - itc_substantiated_paise
         - itc_at_risk_paise
         - itc_variance_paise
+        - total_traps
       properties:
         auto_match_rate:
           type: number
@@ -1212,8 +1214,9 @@ components:
         trap_capture_rate:
           type: number
         total_traps:
-          type: integer
-          nullable: true
+          anyOf:
+            - type: integer
+            - type: "null"
           description: >
             The denominator trap_capture_rate divided by — the count of subjects
             this dataset deliberately does not determine. It is 2 at 50 records
@@ -1293,9 +1296,9 @@ components:
         - match_count
         - exception_count
         - metrics
+        - tier_confidence
       properties:
         tier_confidence:
-          type: object
           description: >
             The confidence the engine stamped on this run's matches, per tier.
             Derived from the run's own MatchGroup rows, never from a table: the
@@ -1307,14 +1310,17 @@ components:
             matches and tiers even though it has no metrics — which is why it
             sits here and not inside Metrics. All five keys are always present,
             for the same reason tier_counts carries all five.
-          required: [T0, T1, T2, T3, LLM]
-          additionalProperties: false
-          properties:
-            T0: { $ref: '#/components/schemas/TierConfidence' }
-            T1: { $ref: '#/components/schemas/TierConfidence' }
-            T2: { $ref: '#/components/schemas/TierConfidence' }
-            T3: { $ref: '#/components/schemas/TierConfidence' }
-            LLM: { $ref: '#/components/schemas/TierConfidence' }
+          anyOf:
+            - type: object
+              required: [T0, T1, T2, T3, LLM]
+              additionalProperties: false
+              properties:
+                T0: { $ref: '#/components/schemas/TierConfidence' }
+                T1: { $ref: '#/components/schemas/TierConfidence' }
+                T2: { $ref: '#/components/schemas/TierConfidence' }
+                T3: { $ref: '#/components/schemas/TierConfidence' }
+                LLM: { $ref: '#/components/schemas/TierConfidence' }
+            - type: "null"
         run_id:
           type: string
         seed:

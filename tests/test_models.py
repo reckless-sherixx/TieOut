@@ -38,6 +38,12 @@ def test_metrics_carries_every_spec_section_9_field():
         # Spec section 6. Rupee figures, not rates -- integer paise, and the
         # only fields here that are neither a rate nor a count.
         "itc_substantiated_paise", "itc_at_risk_paise", "itc_variance_paise",
+        # Added 2026-09-02, and NOT a new metric: it is the denominator
+        # `trap_capture_rate` already divided by, promoted onto the wire so a
+        # console can render "100.0% (10 of 10 traps)". Without it, 100% of 2
+        # and 100% of 100 are the same string, which is how a sound metric came
+        # to read as manufactured.
+        "total_traps",
     }
     assert set(Metrics.model_fields) == expected
 

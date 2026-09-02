@@ -340,6 +340,29 @@ class DriftReport(BaseModel):
     narrative: str | None
 
 
+class TierConfidence(BaseModel):
+    """One tier's confidence on one run.
+
+    The console used to carry a hardcoded table of these values and it drifted:
+    it rendered the word "verified" on the LLM rung, where the engine stamps
+    0.70. This field is derived from the run's own `MatchGroup` rows so a
+    change in the engine's stamp reaches the screen without anybody remembering
+    to edit a constant.
+    """
+
+    model_config = ConfigDict(strict=True)
+
+    #: The single confidence every match from this tier carried. **None** when
+    #: the tier produced no matches, and None when it produced matches at two
+    #: different confidences -- a set of two values has no single
+    #: representative, and reporting one would be true of some of its matches
+    #: and false of the rest.
+    confidence_observed: float | None
+    #: True only in the second of those cases, so a consumer can tell "this rung
+    #: did not fire" from "this rung disagrees with itself".
+    confidence_conflict: bool
+
+
 class RunSummary(BaseModel):
     model_config = ConfigDict(strict=True)
 
@@ -358,3 +381,10 @@ class RunSummary(BaseModel):
     match_count: int
     exception_count: int
     metrics: Metrics | None
+    #: The confidence the engine stamped, per tier, on THIS run. All five keys
+    #: are always present, for the same reason `tier_counts` carries all five.
+    #: Populated at the API boundary from the run's matches -- it lives here and
+    #: not on `Metrics` because an UNSCORED run (one over uploaded files) has
+    #: matches and tiers but no metrics, and its tier confidences are still real.
+    #: None on a run stored before this field existed.
+    tier_confidence: dict[str, TierConfidence] | None = None
