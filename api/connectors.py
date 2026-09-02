@@ -47,6 +47,24 @@ router = APIRouter(dependencies=[Depends(require_principal)], tags=["connectors"
 RepoDep = Annotated[Repo, Depends(get_repo)]
 
 
+#: What replaces a secret that reached a message it should not have.
+REDACTED = "[redacted]"
+
+
+def redacted(text: str) -> str:
+    """No configured secret survives into a response body.
+
+    The 502 below forwards text that ORIGINATED UPSTREAM -- a mail server's
+    refusal, a payment gateway's error -- and no upstream is trusted not to
+    quote back something it was sent. Every refusal written in
+    `core/connectors/` already names the variable and never the value, and its
+    tests hold it to that; this is the belt for the message nobody wrote.
+    """
+    for secret in settings.connector_secrets():
+        text = text.replace(secret, REDACTED)
+    return text
+
+
 class SyncRequest(BaseModel):
     """The window to fetch. Dates, not timestamps: a settlement report and a
     bank statement are both period documents, and an hour has no meaning in
@@ -122,7 +140,7 @@ def sync_connector(name: str, body: SyncRequest, repo: RepoDep) -> dict:
         # to look at their configuration or at their bank.
         raise HTTPException(
             status_code=502,
-            detail=f"{name} could not complete the fetch: {exc}",
+            detail=redacted(f"{name} could not complete the fetch: {exc}"),
         ) from exc
 
     upload_ids: list[str] = []

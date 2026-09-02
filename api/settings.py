@@ -528,3 +528,28 @@ def connectors() -> dict:
         imap=imap_settings(),
         watch_dir=watch_dir(),
     )
+
+
+def connector_secrets() -> tuple[str, ...]:
+    """Every connector secret this process holds, for redaction and nothing else.
+
+    The one consumer is `api/connectors.py`, which forwards a connector's own
+    error text into a 502 body. That text is legible on purpose -- "Razorpay
+    returned HTTP 500 for 2026-08" is worth reading -- but it originates
+    upstream, and no upstream is trusted not to quote back something it was
+    sent. So the values are scrubbed out of it on the way to the wire.
+
+    This is defence in depth, not the primary control: every refusal in
+    `core/connectors/` already names the VARIABLE and never the value, and the
+    tests hold them to it. This is what catches the message nobody wrote.
+    """
+    return tuple(
+        value
+        for value in (
+            razorpay_key_id(),
+            razorpay_key_secret(),
+            _optional(IMAP_PASSWORD_ENV),
+            _optional(PDF_PASSWORD_ENV),
+        )
+        if value
+    )

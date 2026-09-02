@@ -136,6 +136,36 @@ def test_a_refusal_names_the_variable_and_never_its_value(client, monkeypatch):
     assert "app-password-9f3c" not in r.text
 
 
+def test_an_upstream_failure_is_a_502_that_carries_no_secret(client, monkeypatch):
+    """The 502 forwards text that came from somewhere else.
+
+    Every refusal written in `core/connectors/` names a variable and never a
+    value, and its own tests hold it to that. This covers the other half: a
+    mail server's own error string, which nobody in this repository wrote and
+    which is not trusted not to quote back what it was sent.
+    """
+    monkeypatch.setenv("RECON_IMAP_HOST", "imap.invalid.test")
+    monkeypatch.setenv("RECON_IMAP_USER", "merchant@example.test")
+    monkeypatch.setenv("RECON_IMAP_PASSWORD", "app-password-9f3c")
+    monkeypatch.setenv("RECON_IMAP_SENDERS", "alerts@slice.co")
+
+    from core.connectors import imap_mailbox
+
+    def exploding_factory(host, port):
+        # The shape of the risk, made concrete: an upstream that repeats what
+        # it was handed. A real server does not do this; the point is that
+        # nothing here depends on that.
+        raise OSError("login rejected for app-password-9f3c")
+
+    monkeypatch.setattr(
+        imap_mailbox.imaplib, "IMAP4_SSL", exploding_factory, raising=True
+    )
+    r = client.post("/api/connectors/imap-mailbox/sync", json=WINDOW)
+    assert r.status_code == 502
+    assert "app-password-9f3c" not in r.text
+    assert "[redacted]" in r.json()["detail"]
+
+
 def test_an_unknown_connector_is_404(client):
     r = client.post("/api/connectors/nope/sync", json=WINDOW)
     assert r.status_code == 404
