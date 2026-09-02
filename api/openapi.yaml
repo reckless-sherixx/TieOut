@@ -663,6 +663,107 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/connectors:
+    get:
+      operationId: listConnectors
+      summary: Every connector this build ships, and whether it is configured
+      description: >
+        A connector fetches a file the merchant would otherwise have to
+        download and upload by hand. This says which ones exist and which are
+        switched on.
+
+        **`available` is a boolean and never a credential.** It answers the only
+        question a console has — can this button do anything — and a response
+        that echoed a key id "for diagnostics" would put one in a browser's
+        network tab and in whatever the console logs.
+
+        Unconfigured is the DEFAULT and is reported as `false` rather than
+        omitted: a connector missing from this list would be indistinguishable
+        from one this build does not have, and those are different things to
+        say.
+      tags: [connectors]
+      responses:
+        "200":
+          description: Every connector, configured or not.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Connector"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/connectors/{name}/sync:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        description: Connector name, as listed by GET /api/connectors.
+        schema:
+          type: string
+    post:
+      operationId: syncConnector
+      summary: Fetch a window from one connector and ingest what it returns
+      description: >
+        **A fetched file enters through the same path an uploaded one does** —
+        the same content hash, the same header-shape detection, the same
+        row-level quarantine, the same blob store. It gets no shortcut for
+        having arrived over HTTPS or IMAP, and the ids this returns address the
+        same resources POST /api/uploads returns.
+
+        Because the identity of an upload is its bytes, syncing the same window
+        twice returns the SAME upload ids and writes nothing a second time.
+
+        `skipped` counts files that were fetched and could not be ingested — a
+        format nothing recognises, a statement PDF still encrypted, a file past
+        the size ceiling. They are counted rather than raised on: one unreadable
+        file must not cost the merchant the statements beside it, and a count is
+        what makes "nothing appeared" distinguishable from "nothing was there".
+      tags: [connectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectorSyncRequest"
+      responses:
+        "200":
+          description: What the fetch produced.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectorSyncResult"
+        "404":
+          description: This build has no connector by that name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        "422":
+          description: >
+            The connector is not configured, or the window runs backwards.
+
+            **The body names the environment variable to set and never its
+            value.** A refusal is read by somebody about to paste a fix into a
+            shell; it tells them which variable, and must never hand back a
+            credential the deployment already holds.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        "502":
+          description: >
+            The counterparty failed — the mail server, or the Razorpay API.
+            Distinct from the 422 above because the fixes are: one is your
+            configuration and the other is somebody else's service.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -743,6 +844,58 @@ components:
             $ref: "#/components/schemas/ConflictError"
 
   schemas:
+
+    Connector:
+      type: object
+      description: >
+        One source this build can pull a file from, and whether this deployment
+        has configured it. Carries no credential, by construction.
+      required: [name, available]
+      properties:
+        name:
+          type: string
+          description: >
+            Stable identifier, and the one the sync path takes —
+            "razorpay-api", "imap-mailbox", "watched-folder".
+        available:
+          type: boolean
+          description: >
+            Whether every variable this connector needs is set. `false` is the
+            default state of a fresh clone and is not an error.
+
+    ConnectorSyncRequest:
+      type: object
+      description: >
+        The window to fetch. Dates rather than timestamps: a settlement report
+        and a bank statement are both period documents and an hour has no
+        meaning in either. `end` is inclusive.
+      required: [start, end]
+      properties:
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
+
+    ConnectorSyncResult:
+      type: object
+      required: [upload_ids, skipped]
+      properties:
+        upload_ids:
+          type: array
+          description: >
+            One id per file that became an upload, addressable at
+            GET /api/uploads/{id} like any other. A file already held under
+            these bytes yields its existing id rather than a new one.
+          items:
+            type: string
+        skipped:
+          type: integer
+          description: >
+            Files that were fetched and could not be ingested. A count rather
+            than an error, so one unreadable file does not cost the merchant
+            the statements beside it.
     # --- Shared primitives ---------------------------------------------
 
     Money:

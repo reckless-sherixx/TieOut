@@ -12,6 +12,10 @@ the window, the key material and the timestamps, exactly as it does for
 `core/adapters/`.
 """
 
-from core.connectors.base import FetchedFile, SourceConnector
+from core.connectors.base import (
+    ConnectorUnconfigured,
+    FetchedFile,
+    SourceConnector,
+)
 
-__all__ = ["FetchedFile", "SourceConnector"]
+__all__ = ["ConnectorUnconfigured", "FetchedFile", "SourceConnector"]

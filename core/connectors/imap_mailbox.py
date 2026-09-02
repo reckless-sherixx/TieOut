@@ -50,7 +50,7 @@ from email import policy
 from email.message import Message
 from typing import Callable, Iterable
 
-from core.connectors.base import FetchedFile
+from core.connectors.base import ConnectorUnconfigured, FetchedFile
 
 #: Builds a connection. Injected so every unit test runs offline against a fake
 #: -- the same seam `core/connectors/razorpay_api.py` uses for its HTTP call.
@@ -184,12 +184,12 @@ class ImapMailboxConnector:
 
     def fetch(self, start: date, end: date) -> list[FetchedFile]:
         if not self.available():
-            raise RuntimeError(
+            raise ConnectorUnconfigured(
                 "imap-mailbox is not configured: set RECON_IMAP_HOST, "
                 "RECON_IMAP_USER and RECON_IMAP_PASSWORD"
             )
         if not self._senders:
-            raise RuntimeError(
+            raise ConnectorUnconfigured(
                 "imap-mailbox has no sender filter: set RECON_IMAP_SENDERS to "
                 "the addresses or domains your bank sends statements from. "
                 "Searching a mailbox unfiltered would download every message "

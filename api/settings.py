@@ -81,6 +81,37 @@ DEFAULT_SESSION_TTL_SECONDS = 12 * 60 * 60
 #: `core/store/blobstore.py` and COMPLIANCE.md.
 BLOB_KEY_ENV = "RECON_BLOB_KEY"
 
+#: --- connectors (Phase C) -----------------------------------------------------
+#:
+#: Every one of these is OPTIONAL, and unset is the default rather than a
+#: failure: `core/connectors/*.available()` reports `False` and the console
+#: shows the connector as off. A clone with none of them set must start, run
+#: and pass its tests, which is why nothing here raises on absence.
+#:
+#: They are read HERE and nowhere under `core/`, on the same rule the analyst
+#: credentials follow: `core/` takes an already-configured object and never an
+#: environment. And no value below ever reaches an error message -- every
+#: refusal in `core/connectors/` names the VARIABLE.
+RAZORPAY_KEY_ID_ENV = "RECON_RAZORPAY_KEY_ID"
+RAZORPAY_KEY_SECRET_ENV = "RECON_RAZORPAY_KEY_SECRET"
+
+#: The mailbox the merchant's bank already sends statements to. `RECON_IMAP_
+#: PASSWORD` is a secret: on Gmail it must be an App Password rather than the
+#: account password, because this connects over plain IMAP and Google refuses
+#: an account password there.
+IMAP_HOST_ENV = "RECON_IMAP_HOST"
+IMAP_PORT_ENV = "RECON_IMAP_PORT"
+IMAP_USER_ENV = "RECON_IMAP_USER"
+IMAP_PASSWORD_ENV = "RECON_IMAP_PASSWORD"
+IMAP_SENDERS_ENV = "RECON_IMAP_SENDERS"
+IMAP_FOLDER_ENV = "RECON_IMAP_FOLDER"
+
+#: The password Indian banks put on a statement PDF. A secret like any other.
+PDF_PASSWORD_ENV = "RECON_PDF_PASSWORD"
+
+#: A directory bank statements land in when no other route reaches them.
+WATCH_DIR_ENV = "RECON_WATCH_DIR"
+
 #: The providers this build knows how to construct, in the order they are
 #: reported. Adding a third means adding a client in `core/llm/analyst.py`, a
 #: credential check below, and a branch in `api/jobs.build_analyst_client` --
@@ -383,3 +414,117 @@ def blob_key() -> bytes | None:
             '"import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`'
         )
     return key
+
+
+# --- connectors ---------------------------------------------------------------
+
+
+def _optional(name: str) -> str | None:
+    """An environment value, or `None` when it is absent or blank.
+
+    Whitespace counts as unset. A variable set to a space is a
+    misconfiguration, and failing the availability check is friendlier than
+    failing on the first login attempt.
+    """
+    return os.environ.get(name, "").strip() or None
+
+
+def razorpay_key_id() -> str | None:
+    return _optional(RAZORPAY_KEY_ID_ENV)
+
+
+def razorpay_key_secret() -> str | None:
+    return _optional(RAZORPAY_KEY_SECRET_ENV)
+
+
+def imap_port() -> int:
+    """The mailbox port. 993 -- IMAP over TLS -- unless overridden.
+
+    A non-numeric value is refused rather than silently defaulted: a deployment
+    that meant to reach a non-standard port and typed it wrong must not come up
+    quietly pointing somewhere else.
+    """
+    raw = _optional(IMAP_PORT_ENV)
+    if raw is None:
+        return 993
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise AuthMisconfigured(f"{IMAP_PORT_ENV} must be a whole number") from exc
+
+
+def imap_settings() -> dict:
+    """Everything `ImapMailboxConnector` needs, with nothing else in it.
+
+    Returns the password because the connector has to log in with it -- there
+    is no boolean form of "authenticate". The containment is the same one
+    `secret_key()` uses: the value goes to exactly one consumer, and every
+    error path in that consumer names the variable instead of the value.
+    """
+    return {
+        "host": _optional(IMAP_HOST_ENV),
+        "port": imap_port(),
+        "username": _optional(IMAP_USER_ENV),
+        "password": _optional(IMAP_PASSWORD_ENV),
+        "sender_filter": _optional(IMAP_SENDERS_ENV) or "",
+        "folder": _optional(IMAP_FOLDER_ENV) or "INBOX",
+        "pdf_password": _optional(PDF_PASSWORD_ENV),
+    }
+
+
+def watch_dir() -> Path | None:
+    """The watched folder, or `None` when none is configured.
+
+    `None` rather than a default under `out/`: a directory this API would poll
+    on every sync is not something to create by accident, and "off" has to be
+    expressible.
+    """
+    raw = _optional(WATCH_DIR_ENV)
+    return Path(raw) if raw else None
+
+
+def razorpay_http():
+    """The transport `RazorpayConnector` calls, or `None` when unconfigured.
+
+    Built here rather than inside the connector for the reason the whole
+    package exists: `core/` must stay importable and testable offline, so the
+    one function that opens a socket lives on this side of the boundary and is
+    injected. `None` when there is no key pair, so an unconfigured deployment
+    holds no live transport at all.
+    """
+    if not (razorpay_key_id() and razorpay_key_secret()):
+        return None
+
+    import urllib.error
+    import urllib.request
+
+    def call(url: str, headers: dict[str, str]) -> tuple[int, bytes]:
+        """An HTTP status is a RESULT, not an exception.
+
+        `urlopen` raises on 4xx and 5xx, and the connector's whole job on a 401
+        is to turn it into a message naming the variable to fix. So the status
+        comes back either way and the connector decides what it means.
+        """
+        request = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return response.status, response.read()
+        except urllib.error.HTTPError as error:
+            return error.status, error.read()
+
+    return call
+
+
+def connectors() -> dict:
+    """Every connector this deployment can offer, configured from the
+    environment. Built per call, like everything else here, so a test that sets
+    a variable gets a connector that sees it."""
+    from core.connectors.registry import default_connectors
+
+    return default_connectors(
+        razorpay_key_id=razorpay_key_id(),
+        razorpay_key_secret=razorpay_key_secret(),
+        http=razorpay_http(),
+        imap=imap_settings(),
+        watch_dir=watch_dir(),
+    )

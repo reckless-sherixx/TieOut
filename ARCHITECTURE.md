@@ -822,7 +822,7 @@ Two further scope facts, stated because omitting them would overclaim:
     |  HTTP + JSON only. web/ never reads core/models.py; the contract is
     |  api/openapi.yaml, from which web/lib/api-types.ts is generated.
     v
-  api/     FastAPI. 17 paths, 19 operations. Thin.
+  api/     FastAPI. 19 paths, 21 operations. Thin.
            Validate -> call core/ -> 404 a missing row -> serialise. No
            arithmetic: net, fees, tax and every rate arrive already computed
            and are passed through untouched.
@@ -1082,7 +1082,7 @@ reviewed: `api/routes.py` does not contain the string `org_id` anywhere.
 against the module's own AST, which is the only form of the claim that survives
 a future author who has not read this document.
 
-The cross-org proof is parametrised over the **14 read operations** the contract
+The cross-org proof is parametrised over the **15 read operations** the contract
 declares, from a table *derived from `api/openapi.yaml`* — adding an operation
 to the contract without adding it to the walk fails the suite, which is the same
 enforcement idea as `tests/test_briefs.py`. Org B receives **404, never 403**,

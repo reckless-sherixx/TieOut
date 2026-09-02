@@ -15,6 +15,20 @@ from typing import Protocol, runtime_checkable
 from pydantic import BaseModel, model_validator
 
 
+class ConnectorUnconfigured(RuntimeError):
+    """This connector was asked to fetch and nothing told it where to look.
+
+    A `RuntimeError` subclass so it is still what every one of these modules
+    documents itself as raising, and a distinct type so `api/connectors.py` can
+    answer it with a 422 -- "you have not set this up" -- while a genuine
+    upstream failure gets a 502. The two need different words on the screen and
+    a bare `RuntimeError` would give them the same ones.
+
+    **The message names the variable and never its value**, on the same rule
+    `api/settings.AuthMisconfigured` follows.
+    """
+
+
 class FetchedFile(BaseModel):
     model_config = {"frozen": True}
 

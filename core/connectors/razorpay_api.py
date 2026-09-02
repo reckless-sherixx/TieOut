@@ -18,7 +18,7 @@ import json
 from datetime import date
 from typing import Callable
 
-from core.connectors.base import FetchedFile
+from core.connectors.base import ConnectorUnconfigured, FetchedFile
 
 _BASE = "https://api.razorpay.com/v1/settlements/recon/combined"
 
@@ -47,7 +47,7 @@ class RazorpayConnector:
 
     def fetch(self, start: date, end: date) -> list[FetchedFile]:
         if not self.available():
-            raise RuntimeError(
+            raise ConnectorUnconfigured(
                 "razorpay-api is not configured: set RECON_RAZORPAY_KEY_ID and "
                 "RECON_RAZORPAY_KEY_SECRET"
             )

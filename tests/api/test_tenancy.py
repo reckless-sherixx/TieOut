@@ -76,6 +76,15 @@ READ_ROUTES: dict[str, str] = {
     "/api/uploads/{id}/quarantine": (
         "/api/uploads/{upload_id}/quarantine?page=1&size=5"
     ),
+    # Deployment configuration rather than anybody's ledger: which connectors
+    # this build ships and whether each is switched on. It is walked here
+    # anyway -- the guard below is what stops a read being added without a
+    # tenancy proof, and an endpoint exempting itself from that guard by
+    # arguing about its own contents is the exemption that eventually hides a
+    # real leak. What it must prove is narrower and is asserted the same way:
+    # both orgs get 200, and neither response carries an identifier of the
+    # other's.
+    "/api/connectors": "/api/connectors",
 }
 
 #: The three writes. Walked by the disabled-surface proof (they must still work
@@ -87,7 +96,15 @@ READ_ROUTES: dict[str, str] = {
 #: upload is keyed on content, so two orgs uploading the SAME bytes must get
 #: two uploads rather than one shared id.
 #: `test_two_orgs_uploading_the_same_file_hold_two_uploads` is that proof.
-WRITE_ROUTES = ("/api/datasets/generate", "/api/runs", "/api/uploads")
+WRITE_ROUTES = (
+    "/api/datasets/generate",
+    "/api/runs",
+    "/api/uploads",
+    # A sync is an upload the merchant did not have to drag, and it goes
+    # through `api/ingest.py` unchanged -- so its tenancy property is the
+    # upload one: the rows land under the calling org.
+    "/api/connectors/{name}/sync",
+)
 
 #: Reachable without a session by design; excluded from both walks.
 AUTH_ROUTES = ("/api/auth/login", "/api/auth/logout")
@@ -453,6 +470,10 @@ CROSS_ORG_EXPECTATION["/api/runs"] = 200
 #: A listing, like `/api/runs`, and answered the same way: 200 with none of the
 #: other org's rows in it. The next test asserts that on the bytes.
 CROSS_ORG_EXPECTATION["/api/uploads"] = 200
+#: Neither a listing of rows nor an id-addressed read: it reports which
+#: connectors this DEPLOYMENT has configured, which is the same answer for
+#: every org and contains no identifier belonging to any of them.
+CROSS_ORG_EXPECTATION["/api/connectors"] = 200
 
 
 @pytest.mark.parametrize("path", sorted(READ_ROUTES), ids=lambda p: p)

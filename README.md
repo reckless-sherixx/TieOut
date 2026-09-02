@@ -167,7 +167,7 @@ core/
   drift/         run-over-run comparison
   store/         SQLite + encrypted blob store
 scorer/          grades a result against truth.json
-api/             FastAPI, 17 paths / 19 operations, openapi.yaml is the contract
+api/             FastAPI, 19 paths / 21 operations, openapi.yaml is the contract
 web/             Next.js App Router console
 tests/           the credibility layer
 bench/           scale baselines held byte-identical across optimisation

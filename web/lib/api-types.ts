@@ -374,10 +374,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every connector this build ships, and whether it is configured
+         * @description A connector fetches a file the merchant would otherwise have to download and upload by hand. This says which ones exist and which are switched on.
+         *     **`available` is a boolean and never a credential.** It answers the only question a console has — can this button do anything — and a response that echoed a key id "for diagnostics" would put one in a browser's network tab and in whatever the console logs.
+         *     Unconfigured is the DEFAULT and is reported as `false` rather than omitted: a connector missing from this list would be indistinguishable from one this build does not have, and those are different things to say.
+         */
+        get: operations["listConnectors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connectors/{name}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Connector name, as listed by GET /api/connectors. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fetch a window from one connector and ingest what it returns
+         * @description **A fetched file enters through the same path an uploaded one does** — the same content hash, the same header-shape detection, the same row-level quarantine, the same blob store. It gets no shortcut for having arrived over HTTPS or IMAP, and the ids this returns address the same resources POST /api/uploads returns.
+         *     Because the identity of an upload is its bytes, syncing the same window twice returns the SAME upload ids and writes nothing a second time.
+         *     `skipped` counts files that were fetched and could not be ingested — a format nothing recognises, a statement PDF still encrypted, a file past the size ceiling. They are counted rather than raised on: one unreadable file must not cost the merchant the statements beside it, and a count is what makes "nothing appeared" distinguishable from "nothing was there".
+         */
+        post: operations["syncConnector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description One source this build can pull a file from, and whether this deployment has configured it. Carries no credential, by construction. */
+        Connector: {
+            /** @description Stable identifier, and the one the sync path takes — "razorpay-api", "imap-mailbox", "watched-folder". */
+            name: string;
+            /** @description Whether every variable this connector needs is set. `false` is the default state of a fresh clone and is not an error. */
+            available: boolean;
+        };
+        /** @description The window to fetch. Dates rather than timestamps: a settlement report and a bank statement are both period documents and an hour has no meaning in either. `end` is inclusive. */
+        ConnectorSyncRequest: {
+            /** Format: date */
+            start: string;
+            /** Format: date */
+            end: string;
+        };
+        ConnectorSyncResult: {
+            /** @description One id per file that became an upload, addressable at GET /api/uploads/{id} like any other. A file already held under these bytes yields its existing id rather than a new one. */
+            upload_ids: string[];
+            /** @description Files that were fetched and could not be ingested. A count rather than an error, so one unreadable file does not cost the merchant the statements beside it. */
+            skipped: number;
+        };
         /**
          * Format: int64
          * @description Integer paise. Never a decimal.
@@ -1471,6 +1538,85 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listConnectors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every connector, configured or not. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connector"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    syncConnector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Connector name, as listed by GET /api/connectors. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectorSyncRequest"];
+            };
+        };
+        responses: {
+            /** @description What the fetch produced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorSyncResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description This build has no connector by that name. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotFoundError"];
+                };
+            };
+            /**
+             * @description The connector is not configured, or the window runs backwards.
+             *     **The body names the environment variable to set and never its value.** A refusal is read by somebody about to paste a fix into a shell; it tells them which variable, and must never hand back a credential the deployment already holds.
+             */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotFoundError"];
+                };
+            };
+            /** @description The counterparty failed — the mail server, or the Razorpay API. Distinct from the 422 above because the fixes are: one is your configuration and the other is somebody else's service. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotFoundError"];
+                };
+            };
         };
     };
 }
