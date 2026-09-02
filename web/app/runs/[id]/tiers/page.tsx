@@ -50,6 +50,7 @@ export default function TiersPage() {
 
             <TierLadder
               tierCounts={run.metrics.tier_counts}
+              tierConfidence={run.tier_confidence}
               matchCount={run.match_count}
             />
           </section>

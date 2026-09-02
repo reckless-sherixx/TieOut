@@ -504,17 +504,6 @@ export interface components {
             llm_cost_usd_per_100: number;
             llm_tokens_per_100: number;
             /**
-             * @description The confidence the engine stamped on this run's matches, per tier. Derived from the run's own MatchGroup rows, never from a table: the console previously carried a hardcoded copy of these values and it drifted, rendering the word "verified" on the LLM rung where the engine stamps 0.70.
-             *     All five keys are ALWAYS present, for the same reason tier_counts carries all five.
-             */
-            tier_confidence?: {
-                T0: components["schemas"]["TierConfidence"];
-                T1: components["schemas"]["TierConfidence"];
-                T2: components["schemas"]["TierConfidence"];
-                T3: components["schemas"]["TierConfidence"];
-                LLM: components["schemas"]["TierConfidence"];
-            };
-            /**
              * @description Matches produced per tier, taken from the engine's own tier assignment (MatchGroup.tier). Powers the run-detail match-rate breakdown by tier (spec §13 #2).
              *     All five keys are ALWAYS present. A tier that scored nothing is 0, never an omitted key — "T1: 0" and "we do not know what T1 did" are different claims, and only the first one is renderable. Render every key, including the zeros.
              */
@@ -540,6 +529,17 @@ export interface components {
         };
         /** @description Mirrors core/models.py:RunSummary. */
         RunSummary: {
+            /**
+             * @description The confidence the engine stamped on this run's matches, per tier. Derived from the run's own MatchGroup rows, never from a table: the console previously carried a hardcoded copy of these values and it drifted, rendering the word "verified" on the LLM rung where the engine stamps 0.70.
+             *     Present on an UNSCORED run too — a run over uploaded files has matches and tiers even though it has no metrics — which is why it sits here and not inside Metrics. All five keys are always present, for the same reason tier_counts carries all five.
+             */
+            tier_confidence?: {
+                T0: components["schemas"]["TierConfidence"];
+                T1: components["schemas"]["TierConfidence"];
+                T2: components["schemas"]["TierConfidence"];
+                T3: components["schemas"]["TierConfidence"];
+                LLM: components["schemas"]["TierConfidence"];
+            };
             run_id: string;
             seed: number;
             record_count: number;

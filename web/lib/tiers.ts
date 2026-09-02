@@ -43,8 +43,6 @@ export type Tier = {
   key: TierKey;
   /** The rule, in one line, for the row itself. */
   rule: string;
-  /** Confidence the engine stamps on a match from this rung. */
-  confidence: string;
   /** What this rung requires, field by field. */
   requires: TierRequirement[];
   /** What it takes to fall through to the next rung. */
@@ -74,7 +72,6 @@ export const TIERS: Record<TierKey, Tier> = {
   T0: {
     key: "T0",
     rule: "Reference hit and exact arithmetic.",
-    confidence: "1.00",
     requires: [
       {
         label: "Reference",
@@ -105,7 +102,6 @@ export const TIERS: Record<TierKey, Tier> = {
   T1: {
     key: "T1",
     rule: "Reconstruction closes exactly, from exactly one payment leg.",
-    confidence: "0.95",
     requires: [
       {
         label: "Reference",
@@ -132,7 +128,6 @@ export const TIERS: Record<TierKey, Tier> = {
   T2: {
     key: "T2",
     rule: "Reconstruction closes exactly, from two or more payment legs.",
-    confidence: "0.99",
     requires: [
       { label: "Reference", value: "Not required" },
       { label: "Arithmetic", value: "Reconstructed net equals the credit exactly" },
@@ -155,7 +150,6 @@ export const TIERS: Record<TierKey, Tier> = {
   T3: {
     key: "T3",
     rule: "The same reconstruction, accepted within tolerance.",
-    confidence: "0.80",
     requires: [
       { label: "Reference", value: "Not required" },
       {
@@ -186,7 +180,6 @@ export const TIERS: Record<TierKey, Tier> = {
   LLM: {
     key: "LLM",
     rule: "The analyst proposed a resolution and the verifier accepted it.",
-    confidence: "verified",
     requires: [
       {
         label: "Proposal",

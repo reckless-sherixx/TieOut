@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { ChevronRightIcon } from "lucide-react";
+import { confidenceLabel, type TierConfidence } from "@/lib/confidence";
 import { formatRate } from "@/lib/money";
 import {
   REFERENCE_RECORDS,
@@ -31,9 +32,17 @@ const int = (n: number) => n.toLocaleString("en-IN");
  */
 export function TierLadder({
   tierCounts,
+  tierConfidence,
   matchCount,
 }: {
   tierCounts: Metrics["tier_counts"];
+  /**
+   * The confidence the ENGINE stamped, per tier, on this run. Undefined on a
+   * run stored before the field existed — which renders as "not reported",
+   * never as a plausible-looking constant. A hardcoded table here is what
+   * rendered "verified" on the rung the engine stamps 0.70.
+   */
+  tierConfidence?: Partial<Record<TierKey, TierConfidence>>;
   /** `match_count` from the wire — a second, independent field to check against. */
   matchCount: number;
 }) {
@@ -90,6 +99,7 @@ export function TierLadder({
             label="Deterministic — no model involved"
             keys={["T0", "T1", "T2", "T3"]}
             tierCounts={tierCounts}
+            tierConfidence={tierConfidence}
             total={total}
             max={max}
             open={open}
@@ -99,6 +109,7 @@ export function TierLadder({
             label="LLM-assisted — proposed by the analyst, accepted by the verifier"
             keys={["LLM"]}
             tierCounts={tierCounts}
+            tierConfidence={tierConfidence}
             total={total}
             max={max}
             open={open}
@@ -161,6 +172,7 @@ function TierGroup({
   label,
   keys,
   tierCounts,
+  tierConfidence,
   total,
   max,
   open,
@@ -169,6 +181,7 @@ function TierGroup({
   label: string;
   keys: readonly TierKey[];
   tierCounts: Metrics["tier_counts"];
+  tierConfidence?: Partial<Record<TierKey, TierConfidence>>;
   total: number;
   max: number;
   open: TierKey | null;
@@ -190,6 +203,7 @@ function TierGroup({
           key={key}
           tier={TIERS[key]}
           value={tierCounts[key]}
+          confidence={tierConfidence?.[key]}
           total={total}
           max={max}
           open={open === key}
@@ -203,6 +217,7 @@ function TierGroup({
 function TierRow({
   tier,
   value,
+  confidence,
   total,
   max,
   open,
@@ -210,6 +225,7 @@ function TierRow({
 }: {
   tier: (typeof TIERS)[TierKey];
   value: number;
+  confidence?: TierConfidence;
   total: number;
   max: number;
   open: boolean;
@@ -291,7 +307,9 @@ function TierRow({
 
       <tr id={panelId} className={cn("border-b border-border", !open && "hidden")}>
         <td colSpan={6} className="px-4 py-6 sm:px-6">
-          {open ? <TierDetail tier={tier} value={value} /> : null}
+          {open ? (
+            <TierDetail tier={tier} value={value} confidence={confidence} />
+          ) : null}
         </td>
       </tr>
     </>
@@ -301,10 +319,13 @@ function TierRow({
 function TierDetail({
   tier,
   value,
+  confidence,
 }: {
   tier: (typeof TIERS)[TierKey];
   value: number;
+  confidence?: TierConfidence;
 }) {
+  const label = confidenceLabel(confidence);
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div>
@@ -325,9 +346,14 @@ function TierDetail({
           ))}
           <div>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-              <dt className="text-2xs text-muted-foreground">Confidence</dt>
-              <dd className="tnum text-xs font-medium">{tier.confidence}</dd>
+              <dt className="text-2xs text-muted-foreground">
+                Confidence the engine stamped
+              </dt>
+              <dd className="tnum text-xs font-medium">{label.value}</dd>
             </div>
+            <p className="mt-0.5 max-w-[62ch] text-2xs leading-relaxed text-muted-foreground">
+              {label.meaning}
+            </p>
           </div>
         </dl>
       </div>

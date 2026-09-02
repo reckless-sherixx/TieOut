@@ -69,7 +69,6 @@ export const TIERS = [
     cardinality: "any",
     tolerance: "0",
     window: "none",
-    confidence: "1.00",
   },
   {
     tier: "T1",
@@ -77,7 +76,6 @@ export const TIERS = [
     cardinality: "exactly one",
     tolerance: "0",
     window: "±2 days",
-    confidence: "0.95",
   },
   {
     tier: "T2",
@@ -85,7 +83,6 @@ export const TIERS = [
     cardinality: "two or more",
     tolerance: "0",
     window: "±2 days",
-    confidence: "0.99",
   },
   {
     tier: "T3",
@@ -93,7 +90,6 @@ export const TIERS = [
     cardinality: "any",
     tolerance: "±₹1",
     window: "±2 days",
-    confidence: "0.80",
   },
   {
     tier: "LLM",
@@ -101,7 +97,6 @@ export const TIERS = [
     cardinality: "one settlement, complete",
     tolerance: "±₹1",
     window: "no lower bound",
-    confidence: "0.70",
   },
 ] as const;
 

@@ -147,7 +147,6 @@ export default function MethodPage() {
                     <Th className="w-36">Payment legs</Th>
                     <Th className="w-24 text-right">Tolerance</Th>
                     <Th className="w-24 text-right">Window</Th>
-                    <Th className="w-24 text-right">Confidence</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -163,11 +162,8 @@ export default function MethodPage() {
                       <td className="tnum py-2.5 pr-4 text-right text-xs">
                         {tier.tolerance}
                       </td>
-                      <td className="tnum py-2.5 pr-4 text-right text-xs">
-                        {tier.window}
-                      </td>
                       <td className="tnum py-2.5 text-right text-xs">
-                        {tier.confidence}
+                        {tier.window}
                       </td>
                     </tr>
                   ))}
