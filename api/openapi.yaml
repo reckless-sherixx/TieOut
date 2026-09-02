@@ -816,7 +816,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NotFoundError"
+                $ref: "#/components/schemas/ConnectionRefusedError"
         "401":
           $ref: "#/components/responses/Unauthorized"
     get:
@@ -925,7 +925,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NotFoundError"
+                $ref: "#/components/schemas/ConnectionRefusedError"
         "502":
           description: >
             The mail server failed. Distinct from the 422 above because the
@@ -979,7 +979,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NotFoundError"
+                $ref: "#/components/schemas/ConnectionRefusedError"
         "502":
           description: >
             The mail server refused the sign-in. Scrubbed — see the sync
@@ -1228,6 +1228,44 @@ components:
         created_at:
           type: string
           format: date-time
+
+    ConnectionRefusedError:
+      type: object
+      description: >
+        A refused request to the credential vault. **`detail` has two shapes
+        and a client has to handle both**, which is stated here rather than
+        left to be discovered: it is a STRING for a refusal this API raised
+        itself — "this deployment has no RECON_BLOB_KEY", "the stored
+        credential will not decrypt", "the window runs backwards" — and an
+        ARRAY of FastAPI's own field errors when the body failed validation,
+        which is what a blank `senders`, an uncompilable `filename_pattern` or
+        a port outside 1–65535 produces.
+
+        The two are not merged into one shape because the field-error array is
+        FastAPI's, not this API's: normalising it would mean re-serialising
+        every validation failure by hand, and a hand-written copy of somebody
+        else's error format is a second thing to keep in step. A console
+        renders the string when it is one and the `msg` of each entry when it
+        is a list.
+      required: [detail]
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+                required: [loc, msg, type]
+                properties:
+                  loc:
+                    type: array
+                    description: Path to the offending field, e.g. ["body", "senders"].
+                    items:
+                      type: [string, integer]
+                  msg:
+                    type: string
+                  type:
+                    type: string
 
     ConnectionDeleted:
       type: object

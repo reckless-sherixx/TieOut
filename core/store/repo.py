@@ -52,6 +52,7 @@ contract and the wire.
 from __future__ import annotations
 
 import json
+import threading
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from datetime import datetime
@@ -116,6 +117,26 @@ __all__ = [
     "UploadSummary",
     "UploadedRow",
 ]
+
+#: Serialises the one-time schema creation in `Repo.__init__`.
+#:
+#: `create_all` and `_migrate` are read-then-write against the database file,
+#: and `sqlite3` gives them no atomicity across the two steps: `create_all`
+#: asks whether each table exists and then creates the ones that do not, so two
+#: `Repo`s constructed at the same moment on the same NEW file both see nothing
+#: and both issue `CREATE TABLE runs`, and the loser gets
+#: "table runs already exists".
+#:
+#: That is not hypothetical here. `api/deps._repo_for` builds one instance per
+#: database path, and since spec 2026-09-02 section 4 there is a background
+#: fetcher thread that asks for the same path a request thread may be asking
+#: for -- on the first request against a fresh deployment, which is exactly the
+#: window. The lock is process-wide rather than per-instance because the
+#: instances are the thing racing.
+#:
+#: It costs nothing after startup: it is held only while the schema is checked,
+#: which happens once per `Repo`, and never around a query.
+_SCHEMA_LOCK = threading.Lock()
 
 #: `SubjectRecord` in the contract: exactly one of the three spec 6.2 input
 #: shapes, narrowed by the sibling `subject_type`.
@@ -533,8 +554,12 @@ class Repo:
             f"sqlite:///{self.path.as_posix()}",
             connect_args={"check_same_thread": False, "timeout": 30.0},
         )
-        SQLModel.metadata.create_all(self._engine)
-        self._migrate()
+        with _SCHEMA_LOCK:
+            # Both steps under the lock, not just the first: `_migrate` reads
+            # `PRAGMA table_info` and then issues `ALTER TABLE`, which is the
+            # same read-then-write shape and races the same way.
+            SQLModel.metadata.create_all(self._engine)
+            self._migrate()
         self._org_id = org_id
         # This instance is in its own scope map, so a sibling scoping back to
         # the org this one holds finds *this* object rather than building a

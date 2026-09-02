@@ -122,6 +122,31 @@ PDF_PASSWORD_ENV = "RECON_PDF_PASSWORD"
 #: A directory bank statements land in when no other route reaches them.
 WATCH_DIR_ENV = "RECON_WATCH_DIR"
 
+#: --- the monthly fetcher (spec 2026-09-02 section 4) --------------------------
+#:
+#: How often the background loop wakes, and whether it runs at all. Both are
+#: read at call time like everything else here, and both have a default that is
+#: the product behaviour rather than the test behaviour: a deployment that sets
+#: neither gets a fetcher that wakes daily, which is the feature.
+#:
+#: `RECON_SYNC_ENABLED=0` switches the loop off entirely -- no task is created,
+#: nothing is scheduled. The test suite sets it (see `tests/conftest.py`),
+#: because a timer running beside 1,500 tests is a source of flakiness nobody
+#: would attribute correctly.
+SYNC_INTERVAL_ENV = "RECON_SYNC_INTERVAL_SECONDS"
+SYNC_ENABLED_ENV = "RECON_SYNC_ENABLED"
+
+#: A day. The loop wakes on this interval; whether any given connection is DUE
+#: is a separate question the scheduler answers from `last_sync_at`, so a short
+#: interval polls the table more often and does not fetch more often.
+DEFAULT_SYNC_INTERVAL_SECONDS = 86_400
+
+#: What counts as "off". Spelled out rather than inferred from truthiness: an
+#: operator who writes `RECON_SYNC_ENABLED=false` means off, and a check that
+#: only understood "0" would leave the fetcher running while the deployment
+#: believed it had been stopped.
+SYNC_DISABLED_VALUES = ("0", "false", "no", "off")
+
 #: The providers this build knows how to construct, in the order they are
 #: reported. Adding a third means adding a client in `core/llm/analyst.py`, a
 #: credential check below, and a branch in `api/jobs.build_analyst_client` --
@@ -564,3 +589,45 @@ def connector_secrets() -> tuple[str, ...]:
         )
         if value
     )
+
+
+# --- the monthly fetcher ------------------------------------------------------
+
+
+def sync_enabled() -> bool:
+    """Whether `api/scheduler.py` starts its loop. Default on.
+
+    On by default because the loop IS the feature: a merchant who stored a
+    mailbox expects statements to arrive without them pressing anything, and a
+    fetcher that had to be switched on would make that promise conditional on
+    a variable nobody documented to them.
+
+    Off is expressible for the two cases that need it: a test suite, which must
+    not have a timer running beside it, and a deployment running several API
+    processes, where exactly one of them should be the one that fetches.
+    """
+    raw = os.environ.get(SYNC_ENABLED_ENV, "").strip().lower()
+    return raw not in SYNC_DISABLED_VALUES if raw else True
+
+
+def sync_interval_seconds() -> int:
+    """How long the loop sleeps between passes. A positive whole number.
+
+    A bad value is refused rather than defaulted, on the same rule
+    `session_ttl_seconds` follows: a deployment that meant to poll hourly and
+    typed it wrong must not come up quietly polling daily, because the symptom
+    -- statements arriving late -- would take a month to notice and would look
+    like a mail problem.
+    """
+    raw = os.environ.get(SYNC_INTERVAL_ENV, "").strip()
+    if not raw:
+        return DEFAULT_SYNC_INTERVAL_SECONDS
+    try:
+        interval = int(raw)
+    except ValueError as exc:
+        raise AuthMisconfigured(
+            f"{SYNC_INTERVAL_ENV} must be a whole number of seconds"
+        ) from exc
+    if interval <= 0:
+        raise AuthMisconfigured(f"{SYNC_INTERVAL_ENV} must be greater than zero")
+    return interval

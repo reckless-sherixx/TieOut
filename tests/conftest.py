@@ -57,3 +57,48 @@ def no_provider_credentials():
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = value
+
+
+@pytest.fixture(scope="session", autouse=True)
+def no_background_sync():
+    """No test starts the monthly fetcher unless it asks to.
+
+    `RECON_SYNC_ENABLED` defaults to ON, because the loop is the feature -- a
+    merchant who stored a mailbox expects statements to arrive without pressing
+    anything. That default is wrong for a test suite: every test that builds an
+    app inside a `with TestClient(...)` runs the lifespan, so a timer would
+    wake beside 1,500 tests, opening a database in a thread while the test
+    beside it is creating one.
+
+    **Session-scoped, and that is not a performance choice.** pytest sets up
+    higher-scoped fixtures FIRST, so a function-scoped version of this would
+    run *after* every module-scoped fixture -- and several of those build an
+    app and drive it (`tests/api/test_tenancy.py::disabled_surface`,
+    `tests/round_trip/test_upload_path.py`). Those fixtures would start a real
+    loop, and its first pass would construct a `Repo` on the same brand-new
+    database file the fixture's own first request was constructing, which is a
+    schema-creation race with a legible symptom ("table runs already exists")
+    and no obvious cause. Session scope is what puts this before all of them.
+
+    (The race itself is fixed in `core/store/repo.py`, which serialises schema
+    creation -- it is real in production too, where the fetcher thread and a
+    request thread can reach a fresh database together. This fixture is about
+    not running a timer during the suite at all.)
+
+    `tests/api/test_scheduler.py` deletes the variable per test, with
+    `monkeypatch`, for the two tests whose subject IS the loop.
+
+    Set rather than deleted, and restored by hand for the same reason the
+    fixture above restores by hand: `load_dotenv` writes straight into
+    `os.environ`, so a variable that was not there to begin with has to be
+    removed rather than reset.
+    """
+    saved = os.environ.get("RECON_SYNC_ENABLED")
+    os.environ["RECON_SYNC_ENABLED"] = "0"
+    try:
+        yield
+    finally:
+        if saved is None:
+            os.environ.pop("RECON_SYNC_ENABLED", None)
+        else:
+            os.environ["RECON_SYNC_ENABLED"] = saved

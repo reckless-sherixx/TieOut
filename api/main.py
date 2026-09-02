@@ -18,9 +18,20 @@ thirteen chances to forget and would leave the fourteenth endpoint silently
 unlogged; a middleware logs the route that ran, whatever it was. It is also
 where the clock is -- `core/` may not read one -- so the timestamp is stamped
 here and handed down, exactly as `created_at` is.
+
+**The monthly fetcher is started here too**, for the third instance of the same
+argument: a background task is a property of the PROCESS rather than of any
+route, and there is exactly one place that owns a process's lifetime. The
+lifespan starts it and, more importantly, stops it -- a task that outlived the
+app would keep a database handle open past shutdown and would surface as a
+warning on every exit, which is how everybody learns to ignore warnings on
+exit. `RECON_SYNC_ENABLED=0` means no task is created at all; see
+`api/scheduler.py`.
 """
 
 from __future__ import annotations
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +46,7 @@ from api.connectors import router as connectors_router
 from api.deps import get_repo
 from api.jobs import utc_now
 from api.routes import router
+from api.scheduler import start_sync_loop, stop_sync_loop
 
 #: Paths that are NOT reads of financial data and are therefore not audited.
 #: The two auth operations: a login is not a read of anybody's ledger, and
@@ -49,6 +61,24 @@ UNAUDITED_PREFIX = "/api/auth/"
 ANONYMOUS_SUBJECT = "anonymous"
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Start the monthly fetcher, and stop it.
+
+    The task is kept on `app.state` rather than in a module global, so two apps
+    built in one process -- which is what every test that calls `create_app`
+    does -- do not share or cancel each other's loop. It is also what lets a
+    test assert that a DISABLED deployment created no task, which is a
+    different claim from "created one that does nothing".
+    """
+    app.state.sync_task = start_sync_loop()
+    try:
+        yield
+    finally:
+        await stop_sync_loop(app.state.sync_task)
+        app.state.sync_task = None
+
+
 def create_app() -> FastAPI:
     """Build the app. A factory so tests can rebuild it under a changed
     environment without reimporting the module."""
@@ -56,7 +86,12 @@ def create_app() -> FastAPI:
         title="Multi-Source Reconciliation API",
         version="0.1.0",
         description="Implements api/openapi.yaml.",
+        lifespan=_lifespan,
     )
+    #: Present before the lifespan runs, so a `TestClient` used without its
+    #: context manager -- which never runs one -- reads `None` rather than
+    #: raising `AttributeError`.
+    app.state.sync_task = None
 
     app.add_middleware(
         CORSMiddleware,

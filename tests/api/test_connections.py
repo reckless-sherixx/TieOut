@@ -459,6 +459,50 @@ def test_testing_an_unknown_connection_is_a_404(client):
 # --- validation ---------------------------------------------------------------
 
 
+# A 422 from these routes arrives in two shapes and the contract declares both.
+# A refusal this API raised itself carries a STRING detail; one FastAPI raised
+# from a field validator carries an ARRAY of its own field errors. Merging them
+# would mean hand-copying somebody else's error format, so the contract
+# declares the union -- and both real bodies are checked against it below,
+# because a declared union nothing exercises is a guess.
+#
+# Two tests rather than one, and the reason is a fixture trap worth naming: the
+# two clients differ only in an environment variable, so a test that asked for
+# both would get whichever fixture ran last for BOTH of them.
+
+
+def test_our_own_refusal_is_a_string_and_matches_the_contract(keyless_client, spec):
+    response = keyless_client.post("/api/connections", json=dict(CONNECTION))
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], str)
+    assert_contract_valid(response.json(), spec, "/api/connections", "post", "422")
+
+
+def test_a_field_level_refusal_is_a_list_and_matches_the_contract(client, spec):
+    response = client.post("/api/connections", json=dict(CONNECTION, senders="  "))
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], list)
+    assert_contract_valid(response.json(), spec, "/api/connections", "post", "422")
+
+
+def test_a_sync_5xx_matches_the_contract(client, mailbox, spec):
+    created = create(client)
+    mailbox.login_error = "the mail server hung up"
+    response = client.post(f"/api/connections/{created['id']}/sync")
+    assert response.status_code == 502
+    assert_contract_valid(
+        response.json(), spec, "/api/connections/{id}/sync", "post", "502"
+    )
+
+
+def test_a_404_matches_the_contract(client, spec):
+    response = client.post("/api/connections/con-nope/sync")
+    assert response.status_code == 404
+    assert_contract_valid(
+        response.json(), spec, "/api/connections/{id}/sync", "post", "404"
+    )
+
+
 def test_a_connection_with_no_sender_filter_is_refused(client):
     """Refused at creation rather than at the first sync.
 

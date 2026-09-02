@@ -521,17 +521,32 @@ def run_sync(
 
     upload_ids: list[str] = []
     quarantined = 0
-    for file in fetched:
-        upload = _ingest(repo, file)
-        if upload is None:
-            # Fetched and unreadable: a format nothing recognises, a statement
-            # PDF still encrypted, a file past the size ceiling. Counted rather
-            # than raised on, so one bad attachment does not cost the merchant
-            # the statements beside it.
-            skipped_names.append(file.suggested_name)
-        else:
-            upload_ids.append(upload.upload_id)
-            quarantined += upload.quarantine_count
+    try:
+        for file in fetched:
+            upload = _ingest(repo, file)
+            if upload is None:
+                # Fetched and unreadable: a format nothing recognises, a
+                # statement PDF still encrypted, a file past the size ceiling.
+                # Counted rather than raised on, so one bad attachment does not
+                # cost the merchant the statements beside it.
+                skipped_names.append(file.suggested_name)
+            else:
+                upload_ids.append(upload.upload_id)
+                quarantined += upload.quarantine_count
+    except Exception as exc:  # noqa: BLE001 -- no 5xx leaves here unscrubbed
+        # The ingest path itself failing -- a full disk, a locked database --
+        # is not something `_ingest` turns into a skip, and it must not become
+        # the one 5xx on these routes that never met the scrub. The plaintexts
+        # are still in scope here, which is the only reason this block is
+        # inside the function rather than around the call.
+        detail = scrubbed(
+            f"the fetch from {credentials.imap_host} succeeded and storing it "
+            f"failed: {exc}",
+            password,
+            pdf_password,
+        )
+        repo.record_sync_failure(credentials.id, error=detail)
+        raise SyncFailed(detail) from exc
 
     repo.record_sync_success(credentials.id, at=now)
     return SyncOutcome(
