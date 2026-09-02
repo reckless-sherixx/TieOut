@@ -8,7 +8,6 @@ import {
   type SubjectAccountingData,
 } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
-import { Caveat } from "@/components/ui/Caveat";
 import type { Metrics, RunSummary } from "@/lib/types";
 
 const int = (n: number) => n.toLocaleString("en-IN");
@@ -101,19 +100,7 @@ export function SubjectAccounting({
           Every subject is matched or excepted, exactly once — never both, never
           neither.
         </p>
-        <Caveat summary="How to read this partition">
-          <p>
-            The rows below are that partition, and there is no residual bucket.
-            All five tiers appear including the zeros: a tier that matched
-            nothing is a result, and an absent row would be a silence.
-          </p>
-          <p>
-            A subject here is a bank line <em>or</em> a PSP transaction. The
-            count of bank lines alone is the smaller number, and it is
-            reconciled beneath the table — which is the whole of the difference
-            between the two totals on this page.
-          </p>
-        </Caveat>
+        
       </div>
 
       <Rail rows={rows} total={accounted} />

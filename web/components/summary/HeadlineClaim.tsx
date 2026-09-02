@@ -7,7 +7,6 @@ import { formatRate } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { Metrics, RunSummary } from "@/lib/types";
 import { DerivationPanel } from "@/components/summary/DerivationPanel";
-import { Caveat } from "@/components/ui/Caveat";
 import { trapShape } from "@/lib/metric-shape";
 
 /**
@@ -84,16 +83,6 @@ export function HeadlineClaim({
         ) : null}
         .
       </p>
-
-      <Caveat summary="Why all four, or none">
-        <p>
-          None of those four numbers is a result on its own. An engine that
-          matches nothing scores a false-match rate of 0.0% and a trap-capture
-          rate of 100% — that is measured, not hypothetical. Quote all four or
-          none. Every one of them opens its own arithmetic.
-        </p>
-        {trap.caveat ? <p>{trap.caveat}</p> : null}
-      </Caveat>
 
       <Invariant holds={holds} metrics={metrics} />
 
@@ -215,13 +204,7 @@ function Invariant({ holds, metrics }: { holds: boolean; metrics: Metrics }) {
               {formatRate(metrics.auto_match_rate, 4)}
             </span>
             ).
-            <Caveat summary="What that equality proves" className="mt-1.5">
-              The two rates are numerator-different — matched, versus matched
-              correctly — so they coincide only while the false-match rate is 0.
-              Checked live against the wire on every render rather than asserted
-              in prose, which means a run that broke it would say so here
-              instead of reading like a run that did not.
-            </Caveat>
+            
           </>
         ) : (
           <>

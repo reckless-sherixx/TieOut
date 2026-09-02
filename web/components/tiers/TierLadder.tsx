@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { ChevronRightIcon } from "lucide-react";
-import { Caveat } from "@/components/ui/Caveat";
 import { confidenceLabel, type TierConfidence } from "@/lib/confidence";
 import { formatRate } from "@/lib/money";
 import {
@@ -159,21 +158,6 @@ export function TierLadder({
         )}
       </p>
 
-      <Caveat summary="What the bars are scaled to, and what a row's defect classes are not">
-        <p>
-          Bars are scaled to the largest rung rather than to the total. The
-          distribution is lopsided by construction, and scaling to the total
-          would round the small rungs away — a rung carrying two matches against
-          a thousand has to stay visible.
-        </p>
-        <p>
-          Defect classes named inside a row are a reference measurement of seed{" "}
-          <span className="tnum">{REFERENCE_SEED}</span> at{" "}
-          <span className="tnum">{int(REFERENCE_RECORDS)}</span> records. The
-          wire carries no attribution of a match to a defect class, so they are
-          never a claim about this run.
-        </p>
-      </Caveat>
     </div>
   );
 }

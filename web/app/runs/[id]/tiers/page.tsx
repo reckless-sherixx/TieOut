@@ -5,7 +5,6 @@ import { useRun } from "@/components/shell/RunScope";
 import { EmptyState } from "@/components/States";
 import { ViewIntro } from "@/components/shell/ViewIntro";
 import { TierLadder } from "@/components/tiers/TierLadder";
-import { DefectDecomposition } from "@/components/tiers/DefectDecomposition";
 
 /**
  * The tier walk, and what it means.
@@ -52,7 +51,6 @@ export default function TiersPage() {
             />
           </section>
 
-          <DefectDecomposition tierCounts={run.metrics.tier_counts} />
         </>
       ) : (
         <EmptyState
