@@ -764,6 +764,234 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/connections:
+    post:
+      operationId: saveConnection
+      summary: Store or replace one mailbox this system fetches statements from
+      description: >
+        **The only body in this API that carries a secret.** A merchant types
+        their mailbox password once and this system holds it so the monthly
+        fetcher can log in without asking again — which on Gmail means an App
+        Password granting full mailbox read access, and every rule below
+        follows from that.
+
+        **No key, no storage.** With `RECON_BLOB_KEY` unset this answers 422
+        naming the variable and stores nothing. The blob store has a documented
+        plaintext mode because a local demo has to run; a credential does not
+        get one. "We would encrypt if configured" and "we encrypt" are
+        different sentences to put in front of a merchant, and only the second
+        may appear on a screen.
+
+        **The response never carries the secret.** It is a Connection, which
+        has `has_password` and no field a password could travel in. There is no
+        operation in this contract that returns the value — not to the owner,
+        not to an admin — and there is not one to be added later.
+
+        Send `id` to replace a connection this org already holds; omit it to
+        create one. **A replace resets the sync state**: the row now describes
+        a different mailbox, and keeping `last_sync_at` would leave the fetcher
+        believing it had already read a mailbox it has never opened.
+      tags: [connections]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionRequest"
+      responses:
+        "200":
+          description: The stored connection, redacted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+        "422":
+          description: >
+            The deployment cannot encrypt (`RECON_BLOB_KEY` is unset), or the
+            body is not a connection that could ever fetch — no sender filter,
+            an uncompilable filename pattern, a blank password.
+
+            **The body names the variable or the field and never a value.** It
+            is read by somebody about to paste a fix into a shell or a form.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    get:
+      operationId: listConnections
+      summary: Every mailbox this org has configured, secrets redacted
+      description: >
+        `has_password` is a boolean and never a credential — the same
+        discipline `GET /api/connectors` follows with `available`. It answers
+        the only question a console has: is this set up.
+
+        Needs no `RECON_BLOB_KEY`, because nothing here is decrypted. A console
+        that could not render its own list on a keyless build would be unable
+        to explain why it cannot store a credential.
+      tags: [connections]
+      responses:
+        "200":
+          description: Every connection, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Connection"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/connections/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ConnectionId"
+    delete:
+      operationId: deleteConnection
+      summary: Remove a connection and the ciphertext it holds
+      description: >
+        A hard delete. A soft-deleted credential is one the merchant believes
+        they revoked and this system still holds, which is the one shape of
+        "deleted" a vault may not have.
+
+        404 both for an id that never existed and for one belonging to another
+        org: the two are indistinguishable on purpose, because a
+        distinguishable answer confirms that somebody else's id is real.
+      tags: [connections]
+      responses:
+        "200":
+          description: The connection is gone.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionDeleted"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/connections/{id}/sync:
+    parameters:
+      - $ref: "#/components/parameters/ConnectionId"
+    post:
+      operationId: syncConnection
+      summary: Fetch this mailbox now and ingest what it returns
+      description: >
+        **A fetched file enters through the same path an uploaded one does** —
+        the same content hash, the same header-shape detection, the same
+        row-level quarantine, the same blob store. The ids this returns address
+        the same resources `POST /api/uploads` returns, and a statement gets no
+        shortcut for having arrived over IMAP.
+
+        The window defaults to the last 45 days, which is deliberately wider
+        than the 30-day interval the monthly fetcher uses: the overlap re-reads
+        statements the content hash already deduplicates, and a window that
+        started where the last one ended would turn one missed run into a
+        permanent hole.
+
+        **`skipped_names` names what was declined.** A credit report the
+        fetcher refused to read, an attachment outside the filename pattern, a
+        file no adapter recognises. An attachment this system declined is a
+        fact the merchant is entitled to, and a bare count cannot distinguish
+        "your bank sent a credit report we refused" from "your bank sent
+        nothing".
+
+        The outcome is written to the connection either way, and **a failure
+        does not advance `last_sync_at`** — so a merchant who presses this and
+        sees it fail is still due at the next monthly tick rather than having
+        quietly consumed their month.
+      tags: [connections]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionSyncRequest"
+      responses:
+        "200":
+          description: What the fetch produced.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionSyncResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: >
+            The window runs backwards, this deployment has no
+            `RECON_BLOB_KEY`, or the stored credential will not decrypt under
+            the key this process holds — which means the key was rotated or
+            lost and the password has to be entered again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        "502":
+          description: >
+            The mail server failed. Distinct from the 422 above because the
+            fixes are: one is your configuration and the other is somebody
+            else's service.
+
+            **The body is scrubbed.** It forwards text that originated
+            upstream, and no upstream is trusted not to quote back the password
+            it was just sent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/connections/{id}/test:
+    parameters:
+      - $ref: "#/components/parameters/ConnectionId"
+    post:
+      operationId: testConnection
+      summary: Sign in to the mailbox and fetch nothing
+      description: >
+        **Why this exists.** "My password is wrong" and "my sender filter
+        matches nothing" both present to a merchant as zero files, and a zero
+        cannot tell them apart. This logs in, opens the folder read-only, and
+        issues no SEARCH and no FETCH — so a 200 means the credential works and
+        any remaining zero is a filter question.
+
+        It writes nothing to the connection. A connectivity check that stamped
+        `last_sync_at` would mean a merchant verifying their setup had told the
+        monthly fetcher the month was done, and they would lose a statement to
+        having checked.
+
+        The folder is opened read-only, so the server cannot mark a merchant's
+        unread mail read as a side effect of them pressing Test.
+      tags: [connections]
+      responses:
+        "200":
+          description: The credential works.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionTestResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: >
+            This deployment has no `RECON_BLOB_KEY`, or the stored credential
+            will not decrypt under the key this process holds.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        "502":
+          description: >
+            The mail server refused the sign-in. Scrubbed — see the sync
+            operation's 502.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotFoundError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+
 components:
   securitySchemes:
     cookieAuth:
@@ -796,6 +1024,14 @@ components:
       in: path
       required: true
       description: Upload identifier (Upload.upload_id).
+      schema:
+        type: string
+
+    ConnectionId:
+      name: id
+      in: path
+      required: true
+      description: Connection identifier (Connection.id).
       schema:
         type: string
 
@@ -844,6 +1080,238 @@ components:
             $ref: "#/components/schemas/ConflictError"
 
   schemas:
+
+    ConnectionRequest:
+      type: object
+      description: >
+        One mailbox to store. **Carries the secrets; nothing this API returns
+        ever does.**
+      required: [imap_host, imap_user, password, senders]
+      properties:
+        id:
+          type: [string, "null"]
+          description: >
+            Present to replace a connection this org already holds, absent to
+            create one. An id from another tenant addresses nothing — every
+            read and write is scoped to the caller's org — so a guess is a 404
+            rather than a leak.
+        kind:
+          type: string
+          enum: [imap]
+          default: imap
+          description: >
+            The only kind this build stores. A field rather than an assumption,
+            so an OAuth token — strictly better than an app password, and out
+            of scope here only because it needs a verified Google Cloud
+            publisher — is another kind rather than another table.
+        imap_host:
+          type: string
+          example: imap.gmail.com
+        imap_port:
+          type: integer
+          default: 993
+          minimum: 1
+          maximum: 65535
+          description: 993 is IMAP over TLS.
+        imap_user:
+          type: string
+          description: The mailbox address.
+        password:
+          type: string
+          format: password
+          description: >
+            **On Gmail this must be an App Password, not the account
+            password** — this connects over IMAP and Google refuses an account
+            password there. Stored AES-256-GCM encrypted under
+            `RECON_BLOB_KEY`, with the connection id and the field name bound
+            in as additional authenticated data so a ciphertext cannot be
+            replayed into another row or another column. It is never returned
+            by any operation.
+        pdf_password:
+          type: [string, "null"]
+          format: password
+          description: >
+            The password Indian banks put on a statement PDF. Sealed
+            separately, under its own binding, because the two secrets are not
+            interchangeable and the store must not be able to present one where
+            the other belongs.
+        senders:
+          type: string
+          description: >
+            Comma-separated addresses or domains the bank sends statements
+            from. **Required and never blank**: an unfiltered mailbox search
+            downloads every message in the window, which is a mailbox dump
+            rather than a reconciliation input. Refused here rather than at the
+            first fetch, so the merchant learns at the form instead of a month
+            later.
+          example: statements@hdfcbank.net
+        folder:
+          type: string
+          default: INBOX
+        filename_pattern:
+          type: [string, "null"]
+          description: >
+            Optional regular expression over attachment filenames; only
+            matching attachments are fetched. `statement` is the obvious value.
+            The credit-report deny list applies regardless and is not
+            configuration — this narrows what a merchant wants, it is not a way
+            to opt back in to a credit report.
+          example: statement
+
+    Connection:
+      type: object
+      description: >
+        One stored mailbox, as this API is willing to describe it. **There is
+        no field here a secret could travel in**, which is where "the secret is
+        never readable back" is actually enforced: a handler cannot serialise
+        what the shape cannot hold.
+      required:
+        [
+          id,
+          kind,
+          imap_host,
+          imap_port,
+          imap_user,
+          senders,
+          folder,
+          filename_pattern,
+          has_password,
+          has_pdf_password,
+          last_sync_at,
+          last_sync_status,
+          last_sync_error,
+          created_at,
+        ]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [imap]
+        imap_host:
+          type: string
+        imap_port:
+          type: integer
+        imap_user:
+          type: string
+        senders:
+          type: string
+        folder:
+          type: string
+        filename_pattern:
+          type: [string, "null"]
+        has_password:
+          type: boolean
+          description: >
+            Whether a mailbox password is stored. A boolean, never the value.
+        has_pdf_password:
+          type: boolean
+        last_sync_at:
+          type: [string, "null"]
+          format: date-time
+          description: >
+            When this mailbox was last fetched SUCCESSFULLY, or null. **A
+            failed sync leaves this exactly where it was** — advancing it would
+            tell the monthly fetcher the month was done and silently cost the
+            merchant a statement.
+        last_sync_status:
+          type: string
+          enum: [never, ok, failed]
+        last_sync_error:
+          type: [string, "null"]
+          description: >
+            Why the last sync failed, **scrubbed**. Every configured and stored
+            secret is replaced with `[redacted]` before this is written: the
+            realistic leak is not something anybody wrote here, it is a mail
+            server quoting the password back in a refusal that the right
+            instinct — record the reason — would otherwise store verbatim.
+        created_at:
+          type: string
+          format: date-time
+
+    ConnectionDeleted:
+      type: object
+      required: [id, deleted]
+      properties:
+        id:
+          type: string
+        deleted:
+          type: boolean
+
+    ConnectionSyncRequest:
+      type: object
+      description: >
+        An optional explicit window. Omit the body entirely — or both fields —
+        for the last 45 days, which is what the console's "Sync now" sends. An
+        explicit window is for an operator backfilling a period they lost.
+      properties:
+        start:
+          type: [string, "null"]
+          format: date
+        end:
+          type: [string, "null"]
+          format: date
+
+    ConnectionSyncResult:
+      type: object
+      required:
+        [
+          upload_ids,
+          skipped,
+          skipped_names,
+          quarantine_count,
+          window_start,
+          window_end,
+        ]
+      properties:
+        upload_ids:
+          type: array
+          description: >
+            One id per file that became an upload, addressable at
+            GET /api/uploads/{id} like any other. A file already held under
+            these bytes yields its existing id rather than a new one, which is
+            what makes an overlapping window free.
+          items:
+            type: string
+        skipped:
+          type: integer
+          description: >
+            How many attachments did not become an upload, for either reason:
+            the fetcher declined to read it, or nothing could parse it. One
+            number, because a merchant asking "why is this not two uploads"
+            wants the count and the names, not a taxonomy of who said no first.
+        skipped_names:
+          type: array
+          description: >
+            The filenames behind that count. Never silently dropped: an
+            attachment this system declined is a fact the merchant is entitled
+            to.
+          items:
+            type: string
+        quarantine_count:
+          type: integer
+          description: >
+            Rows the ingested files could not turn into records, reviewable at
+            GET /api/uploads/{id}/quarantine.
+        window_start:
+          type: string
+          format: date
+        window_end:
+          type: string
+          format: date
+
+    ConnectionTestResult:
+      type: object
+      required: [ok, detail]
+      properties:
+        ok:
+          type: boolean
+          description: Always true on a 200; a failure is a 502.
+        detail:
+          type: string
+          description: >
+            What was done, in a sentence a merchant can read. Names the host,
+            the user and the folder, and says that nothing was fetched.
 
     Connector:
       type: object

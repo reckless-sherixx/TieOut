@@ -30,6 +30,7 @@ from core.store.repo import AccessRecord, SubjectNotFound
 
 from api import auth, settings
 from api.auth import router as auth_router
+from api.connections import router as connections_router
 from api.connectors import router as connectors_router
 from api.deps import get_repo
 from api.jobs import utc_now
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
     # without a session, and they are on a router with no dependency.
     app.include_router(auth_router)
     app.include_router(connectors_router)
+    app.include_router(connections_router)
     app.include_router(router)
     return app
 

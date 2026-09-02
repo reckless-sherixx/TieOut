@@ -321,3 +321,100 @@ class UploadQuarantine(SQLModel, table=True):
     #: on it, so the strings are stable.
     reason: str = Field(index=True)
     detail: str
+
+
+class Connection(SQLModel, table=True):
+    """One mailbox a merchant has asked this system to fetch statements from.
+
+    **This is the only table in the schema that holds a credential, and every
+    difference from the tables above follows from that.**
+
+    A merchant types their Gmail App Password once, into the console, and
+    expects the fetcher to pull statements every month without asking again.
+    That is a persisted secret granting FULL MAILBOX READ ACCESS -- not read
+    access to statements, to the whole mailbox -- so:
+
+    * **`secret_ciphertext` is bytes, never a string.** It is sealed by
+      `core/store/secretbox.py` under `RECON_BLOB_KEY` with the connection id
+      and the field name bound in as AES-GCM additional authenticated data, so
+      a ciphertext lifted out of this row cannot be replayed into another row
+      or another column. There is no plaintext mode: unlike the blob store,
+      which writes plaintext when no key is configured, a keyless deployment
+      REFUSES to create a connection at all (spec 2026-09-02 section 3.3).
+
+    * **There is no column holding the password and no method returning one.**
+      `Repo.list_connections` and `Repo.connection` return a summary carrying
+      `has_password` and nothing else; the ciphertext leaves the store only
+      through `Repo.connection_credentials`, which exists so that a call to it
+      is visible in a diff.
+
+    * **`last_sync_error` is scrubbed before it is written.** It is the one
+      free-text column in this table and the one most likely to end up holding
+      a mail server's reply, which is text this system sent a password to.
+      `api/connections.py` runs it through the connector-secret scrub on the
+      way in, so a password cannot reach the console by way of an error
+      message.
+
+    **`last_sync_at` advances on success only.** A failed sync sets
+    `last_sync_status` to "failed" and leaves this column exactly where it was,
+    so the next tick of `api/scheduler.py` retries rather than deciding the
+    month is done. That is the whole of the fetcher's state: a restart resumes
+    from this row and neither re-fetches nor loses a cycle.
+
+    `created_at` and `last_sync_at` are ISO-8601 STRINGS stamped at the API
+    boundary, for the same reason `Run.created_at` is: nothing in this package
+    reads a clock, and a string column round-trips the exact instant including
+    its offset where SQLite's DATETIME affinity would silently drop the zone.
+
+    The primary key is `(org_id, id)` rather than `id` alone. A connection
+    identifier belongs to the tenant that holds it, and two tenants who happen
+    to choose the same one are two connections -- the same argument
+    `Upload.content_sha256` makes about two tenants holding the same file.
+    """
+
+    __tablename__ = "connections"
+
+    #: The tenant this row belongs to. Every query in `core/store/repo.py`
+    #: filters on it; nothing above the repository ever supplies one. Half of
+    #: the primary key -- see the class docstring.
+    org_id: str = Field(default=DEFAULT_ORG_ID, primary_key=True, index=True)
+
+    id: str = Field(primary_key=True)
+
+    #: `imap` today. A column rather than an assumption, so the OAuth token
+    #: this vault is shaped to hold one day (spec section 8) is another kind
+    #: rather than another table.
+    kind: str = Field(index=True)
+
+    imap_host: str
+    imap_port: int
+    imap_user: str
+
+    #: The app password, sealed. See the class docstring.
+    secret_ciphertext: bytes
+
+    #: The password an Indian bank puts on the statement PDF, sealed, or NULL
+    #: when the merchant has none. A separate column and a separate AAD field
+    #: name: the two secrets are not interchangeable and the store must not be
+    #: able to present one where the other belongs.
+    pdf_secret_ciphertext: bytes | None = Field(default=None)
+
+    #: Comma-separated sender addresses. Never empty: an unfiltered mailbox
+    #: search is a mailbox dump rather than a reconciliation input, and
+    #: `core/connectors/imap_mailbox.py` refuses one.
+    senders: str
+    folder: str = Field(default="INBOX")
+    #: An optional regex over attachment names, the per-connection form of
+    #: `RECON_IMAP_FILENAME_PATTERN`. The credit-report deny list applies
+    #: regardless and is not configuration.
+    filename_pattern: str | None = Field(default=None)
+
+    #: ISO-8601, or NULL for a connection that has never synced SUCCESSFULLY.
+    last_sync_at: str | None = Field(default=None, index=True)
+    #: never | ok | failed.
+    last_sync_status: str = Field(default="never", index=True)
+    #: Scrubbed by `api/connections.py` before it gets here.
+    last_sync_error: str | None = Field(default=None)
+
+    #: ISO-8601, handed in by `api/`. See the class docstring.
+    created_at: str = Field(index=True)

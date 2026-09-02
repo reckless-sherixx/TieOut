@@ -268,14 +268,106 @@ def test_exactly_two_methods_in_the_repository_name_the_access_log_table():
     }
 
 
-def test_the_repository_has_no_delete_or_update_path_at_all():
-    """Not merely none for the access log: none anywhere in the module.
+#: The only two functions in `core/store/repo.py` allowed to remove a row, and
+#: they may remove exactly one kind of row: a `Connection`.
+#:
+#: **Why the append-only rule has an exception at all, and why it is this one.**
+#: Everything else this module stores is a RECORD OF WHAT HAPPENED -- a run,
+#: its inputs, the matches and exceptions it produced, the trail explaining
+#: them, and the log of who read them. For all of that, "deleted" is a defect:
+#: a reconciliation nobody can re-derive is not evidence, and an access log
+#: with a delete path is not an audit log.
+#:
+#: `connections` is the opposite kind of row. It holds a mailbox credential the
+#: merchant handed over, and the one thing a credential vault may NOT do is
+#: keep a secret its owner believes they revoked. A soft delete -- a flag, a
+#: tombstone, a row that stops being listed -- would leave the ciphertext in
+#: the file, and every honest sentence about revocation would become false.
+#: `save_connection` deletes for the same reason: a replace must not leave the
+#: superseded ciphertext behind it.
+#:
+#: So the guarantee is narrowed rather than dropped, and the narrowing is
+#: checked twice below: nothing outside these two functions may delete, and
+#: these two functions may not name any table but `Connection`.
+VAULT_DELETERS = {"delete_connection", "save_connection"}
 
-    `session.delete`, `session.execute(delete(...))` and a bare `DELETE`/`UPDATE`
-    in raw SQL are the three ways a row could leave, and the store's job is to
-    accumulate a run's output and read it back. The only raw SQL this module
-    issues is the additive `ALTER TABLE ... ADD COLUMN` of the migration, which
-    the check below allows by name and nothing else.
+
+def _functions_containing_deletes(tree: ast.Module) -> dict[str, list[str]]:
+    """Every function that calls something named `delete`, and where."""
+    found: dict[str, list[str]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+            func = child.func
+            named = (
+                isinstance(func, ast.Attribute) and func.attr == "delete"
+            ) or (isinstance(func, ast.Name) and func.id == "delete")
+            if named:
+                found.setdefault(node.name, []).append(f"line {child.lineno}")
+    return found
+
+
+def test_only_the_vault_may_remove_a_row_and_only_its_own():
+    """Deletion is confined to two named functions over one table.
+
+    The original form of this test banned deletion outright, which was correct
+    while every table here held a record of what happened. The credential
+    vault (spec 2026-09-02 section 3) is not that kind of table: a stored
+    mailbox password must actually GO when the merchant removes it, so the ban
+    is narrowed to a named allowlist rather than weakened to a comment.
+
+    Two assertions, and the second is the one doing the work: an allowlist
+    alone would let `delete_connection` grow a line that dropped an audit row,
+    so the allowed functions are also held to naming no table but
+    `Connection`.
+    """
+    tree = _repo_source_tree()
+    deleters = _functions_containing_deletes(tree)
+    unexpected = {
+        name: where for name, where in deleters.items() if name not in VAULT_DELETERS
+    }
+    assert not unexpected, (
+        "core/store/repo.py deletes rows outside the credential vault: "
+        f"{unexpected}"
+    )
+
+    tables = (
+        "Run",
+        "Record",
+        "Match",
+        "Exception_",
+        "Audit",
+        "AccessLog",
+        "Upload",
+        "UploadRecord",
+        "UploadQuarantine",
+    )
+    for name in deleters:
+        also_names = {
+            table for table in tables if name in _functions_naming(tree, table)
+        }
+        assert not also_names, (
+            f"{name}() is allowed to delete a Connection and it also names "
+            f"{sorted(also_names)}: a delete path over a record of what "
+            "happened is exactly what this check exists to prevent"
+        )
+
+
+def test_the_repository_has_no_update_path_and_no_hand_written_removal_sql():
+    """`.update()` and raw `DELETE`/`UPDATE`/`DROP` are still banned outright.
+
+    The vault exception above is `session.delete` on one model. It is not a
+    licence for raw SQL, which no test can attribute to a table, and not a
+    licence for `.update()`, which nothing in this module has ever needed --
+    the two places that change a row (`set_progress`, `_write_sync_outcome`)
+    load it, assign to it and commit, which is visible in review in a way a
+    bulk UPDATE with a WHERE clause is not.
+
+    The only raw SQL this module issues is the additive
+    `ALTER TABLE ... ADD COLUMN` of the migration.
     """
     tree = _repo_source_tree()
     docstrings = _docstring_ids(tree)
@@ -283,10 +375,10 @@ def test_the_repository_has_no_delete_or_update_path_at_all():
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             func = node.func
-            if isinstance(func, ast.Attribute) and func.attr in ("delete", "update"):
-                offenders.append(f"call to .{func.attr}() at line {node.lineno}")
-            if isinstance(func, ast.Name) and func.id in ("delete", "update"):
-                offenders.append(f"call to {func.id}() at line {node.lineno}")
+            if isinstance(func, ast.Attribute) and func.attr == "update":
+                offenders.append(f"call to .update() at line {node.lineno}")
+            if isinstance(func, ast.Name) and func.id == "update":
+                offenders.append(f"call to update() at line {node.lineno}")
         if (
             isinstance(node, ast.Constant)
             and isinstance(node.value, str)
@@ -334,4 +426,8 @@ def test_a_read_is_logged_even_though_the_repo_exposes_no_way_to_erase_it(
         if not name.startswith("_")
         and any(word in name for word in ("delete", "remove", "purge", "erase", "drop"))
     ]
-    assert not erasers, erasers
+    # `delete_connection` is the credential vault, and it is the only one --
+    # see `VAULT_DELETERS` for why a mailbox password is the one row in this
+    # store that must actually be removable. Nothing that takes an access-log
+    # row, a run or an audit entry out may appear beside it.
+    assert erasers == ["delete_connection"], erasers

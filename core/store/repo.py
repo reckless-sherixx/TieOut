@@ -81,6 +81,7 @@ from core.store.schema import (
     DEFAULT_ORG_ID,
     AccessLog,
     Audit,
+    Connection,
     Exception_,
     Match,
     Record,
@@ -94,6 +95,8 @@ __all__ = [
     "AccessRecord",
     "BatchNetting",
     "BatchNettingOrderLine",
+    "ConnectionCredentials",
+    "ConnectionSummary",
     "ExceptionsPage",
     "MatchDetail",
     "MatchesPage",
@@ -194,6 +197,72 @@ class ExceptionsPage(BaseModel):
     total: int
     page: int
     size: int
+
+
+class ConnectionSummary(BaseModel):
+    """One mailbox connection, as everything above this module may see it.
+
+    **There is no ciphertext field and no password field, by construction.**
+    Spec 2026-09-02 section 3.3 rule 2 says the secret is never readable back
+    -- not to the owner, not to an admin, and there is no endpoint to be found
+    later. The cheapest way to keep that promise is to make the shape a route
+    serialises incapable of carrying one: `has_password` answers the only
+    question a console has ("is this set up"), and a handler that wanted to
+    leak the value would have to go and call `connection_credentials` by name.
+
+    `last_sync_at` and `created_at` are ISO-8601 strings, stamped at the API
+    boundary. `last_sync_at` is NULL until a sync SUCCEEDS -- a failure records
+    its status and its reason and leaves this alone, which is what makes the
+    next tick retry instead of skipping a month.
+    """
+
+    model_config = ConfigDict(strict=True)
+
+    id: str
+    kind: Literal["imap"]
+    imap_host: str
+    imap_port: int
+    imap_user: str
+    senders: str
+    folder: str
+    filename_pattern: str | None
+    #: Whether a mailbox password is stored. A boolean, never the value -- the
+    #: same discipline `api/settings.has_anthropic_api_key` follows.
+    has_password: bool
+    has_pdf_password: bool
+    last_sync_at: str | None
+    last_sync_status: Literal["never", "ok", "failed"]
+    #: Already scrubbed when it was written. See `api/connections.py`.
+    last_sync_error: str | None
+    created_at: str
+
+
+class ConnectionCredentials(BaseModel):
+    """Everything a fetch needs, ciphertext included. **Never serialised.**
+
+    Deliberately a second type rather than a flag on `ConnectionSummary`. The
+    ciphertexts leave the store through exactly one method,
+    `Repo.connection_credentials`, and the type they arrive in is not the type
+    any route returns -- so "did this handler expose a credential" is answered
+    by looking for one name, in one file, rather than by auditing every field
+    of every response.
+
+    The values here are SEALED. Opening them needs `core/store/secretbox.py`
+    and the deployment's `RECON_BLOB_KEY`, which lives above `core/`.
+    """
+
+    model_config = ConfigDict(strict=True)
+
+    id: str
+    kind: str
+    imap_host: str
+    imap_port: int
+    imap_user: str
+    senders: str
+    folder: str
+    filename_pattern: str | None
+    secret_ciphertext: bytes
+    pdf_secret_ciphertext: bytes | None
 
 
 class RecordsPage(BaseModel):
@@ -443,6 +512,14 @@ class Repo:
         "uploads",
         "upload_records",
         "upload_quarantine",
+        # `connections` is deliberately NOT here, and the omission is the
+        # documentation. This tuple is what `_migrate` walks, and `_migrate`
+        # exists for exactly one job: adding `org_id` to a database written
+        # before that column existed. `connections` was born after it, with
+        # `org_id` in its PRIMARY KEY -- so there is no version of that table
+        # anywhere that needs the column added, and listing it would claim a
+        # migration that cannot be performed (SQLite will not drop or add a
+        # primary-key column) and cannot be needed.
     )
 
     def __init__(self, db_path: Path | str, *, org_id: str = DEFAULT_ORG_ID) -> None:
@@ -1516,6 +1593,262 @@ class Repo:
                     )
         return orders, psp_txns, bank_lines
 
+    # --- connections ----------------------------------------------------------
+    #
+    # The credential vault (spec 2026-09-02 section 3). Everything below is
+    # org-scoped exactly like the tables above it -- a connection belonging to
+    # another org is INVISIBLE here rather than forbidden, which is the same
+    # answer `upload()` gives and for the same reason: a 403 confirms that an
+    # id exists, and a merchant enumerating ids is precisely who would want
+    # that confirmation.
+    #
+    # The one asymmetry is deliberate and is confined to two methods:
+    # `connection_credentials` is the ONLY way a ciphertext leaves this module,
+    # and `connection_org_ids` is the ONLY read here that is not filtered by
+    # org. Both are named so that a call to either is visible in a diff.
+
+    def save_connection(
+        self,
+        *,
+        connection_id: str,
+        kind: str,
+        imap_host: str,
+        imap_port: int,
+        imap_user: str,
+        secret_ciphertext: bytes,
+        pdf_secret_ciphertext: bytes | None,
+        senders: str,
+        folder: str,
+        filename_pattern: str | None,
+        created_at: datetime,
+    ) -> ConnectionSummary:
+        """Create this connection, or replace it if the org already holds it.
+
+        **A replace resets the sync state to "never".** The credentials, the
+        host or the sender list have just changed, so the old outcome describes
+        a mailbox this row no longer points at: keeping `last_sync_at` would
+        leave the fetcher believing it had already read a mailbox it has never
+        opened, and a merchant who has just corrected a password would wait up
+        to thirty days to learn whether the correction worked. Resetting means
+        the next tick tries immediately, which is what they expect from having
+        pressed save.
+
+        `created_at` is required and must be a `datetime`, for the same reason
+        `create_run(created_at=...)` is: nothing in `core/` reads a clock, and
+        a default here would be the constraint's only violation.
+
+        The sealed values are handed in already sealed. This module holds no
+        key and cannot open them -- `core/store/secretbox.py` does that, from
+        a key `api/settings.blob_key()` reads.
+        """
+        if not isinstance(created_at, datetime):
+            raise TypeError(
+                "save_connection(created_at=...) must be a datetime stamped by "
+                "the caller: core/ never reads a clock (LANE-D-api.md 5.5)"
+            )
+
+        row = Connection(
+            org_id=self._org_id,
+            id=connection_id,
+            kind=kind,
+            imap_host=imap_host,
+            imap_port=int(imap_port),
+            imap_user=imap_user,
+            secret_ciphertext=secret_ciphertext,
+            pdf_secret_ciphertext=pdf_secret_ciphertext,
+            senders=senders,
+            folder=folder,
+            filename_pattern=filename_pattern,
+            last_sync_at=None,
+            last_sync_status="never",
+            last_sync_error=None,
+            created_at=created_at.isoformat(),
+        )
+        # Read off the row BEFORE the commit that expires it, exactly as
+        # `record_upload` does: SQLAlchemy expires every attribute on commit
+        # and this instance is detached immediately after.
+        summary = _as_connection(row)
+        with Session(self._engine) as session:
+            existing = session.exec(
+                select(Connection).where(
+                    self._mine(Connection), Connection.id == connection_id
+                )
+            ).first()
+            if existing is not None:
+                session.delete(existing)
+                session.commit()
+            session.add(row)
+            session.commit()
+        return summary
+
+    def list_connections(self) -> list[ConnectionSummary]:
+        """Every connection this org holds, oldest first, redacted.
+
+        Ordered by `(created_at, id)`, which is total. The console renders this
+        list and a replace rewrites a row, so an order that fell back to
+        SQLite's rowid would reshuffle under the merchant every time they
+        pressed save.
+        """
+        with Session(self._engine) as session:
+            rows = session.exec(
+                select(Connection)
+                .where(self._mine(Connection))
+                .order_by(col(Connection.created_at), col(Connection.id))
+            ).all()
+        return [_as_connection(row) for row in rows]
+
+    def connection(self, connection_id: str) -> ConnectionSummary | None:
+        """One connection, redacted. `None` for an id this org does not hold."""
+        row = self._connection_row(connection_id)
+        return None if row is None else _as_connection(row)
+
+    def connection_credentials(
+        self, connection_id: str
+    ) -> ConnectionCredentials | None:
+        """The sealed credentials, for a caller that is about to fetch.
+
+        **The one door the ciphertext leaves by.** It is a separate method with
+        a separate return type so that "which code can reach a stored
+        credential" is answered by grepping one name, rather than by auditing
+        every field of every response shape. Still org-scoped: a fetch for
+        another org's mailbox is not a permissions question here, it is a row
+        that does not exist.
+        """
+        row = self._connection_row(connection_id)
+        if row is None:
+            return None
+        return ConnectionCredentials(
+            id=row.id,
+            kind=row.kind,
+            imap_host=row.imap_host,
+            imap_port=row.imap_port,
+            imap_user=row.imap_user,
+            senders=row.senders,
+            folder=row.folder,
+            filename_pattern=row.filename_pattern,
+            secret_ciphertext=bytes(row.secret_ciphertext),
+            pdf_secret_ciphertext=(
+                None
+                if row.pdf_secret_ciphertext is None
+                else bytes(row.pdf_secret_ciphertext)
+            ),
+        )
+
+    def delete_connection(self, connection_id: str) -> bool:
+        """Remove the row, ciphertext included. `False` if there was nothing.
+
+        A hard delete rather than a flag. A soft-deleted credential is a
+        credential the merchant believes they revoked and this system still
+        holds, which is the one shape of "deleted" a vault may not have.
+        """
+        with Session(self._engine) as session:
+            row = session.exec(
+                select(Connection).where(
+                    self._mine(Connection), Connection.id == connection_id
+                )
+            ).first()
+            if row is None:
+                return False
+            session.delete(row)
+            session.commit()
+        return True
+
+    def record_sync_success(self, connection_id: str, *, at: datetime) -> bool:
+        """Mark this connection synced at `at` and clear its error.
+
+        `at` is required and must be a `datetime`: this package reads no clock,
+        and a fetcher whose "last synced" came from the database's own idea of
+        now would be one default away from breaking that.
+        """
+        if not isinstance(at, datetime):
+            raise TypeError(
+                "record_sync_success(at=...) must be a datetime stamped by the "
+                "caller: core/ never reads a clock (LANE-D-api.md 5.5)"
+            )
+        return self._write_sync_outcome(
+            connection_id, last_sync_at=at.isoformat(), status="ok", error=None
+        )
+
+    def record_sync_failure(self, connection_id: str, *, error: str) -> bool:
+        """Mark this connection failed, **without advancing `last_sync_at`**.
+
+        This is the rule the monthly fetcher is built on (spec 2026-09-02
+        section 4). The next tick reads `last_sync_at`, finds the same value it
+        found last time, decides the connection is still due and retries. A
+        failure that advanced the clock would tell the next tick the month was
+        done, and the merchant would lose a month of statements to a password
+        they could have fixed the same day -- silently, which is the part that
+        makes it expensive.
+
+        `error` is expected to be ALREADY SCRUBBED. The scrub lives at the API
+        boundary, in `api/connections.py`, because it needs the deployment's
+        configured secrets and `core/` reads no configuration; this method
+        stores what it is handed.
+        """
+        return self._write_sync_outcome(
+            connection_id, last_sync_at=_UNCHANGED, status="failed", error=error
+        )
+
+    def connection_org_ids(self) -> list[str]:
+        """Every org that holds at least one connection. **Not org-scoped.**
+
+        The single deliberate widening in this module, and it is here because
+        the background fetcher belongs to no tenant: it wakes on a timer with
+        no request and no principal behind it, so there is no org for it to be
+        scoped to until it asks which orgs have work.
+
+        What keeps that safe is how narrow it is. It returns identifiers and
+        nothing else -- no host, no user, no ciphertext, no count -- and
+        `api/scheduler.py` uses each one only to build `repo.scoped(org_id)`,
+        after which every read and write it performs is filtered again by
+        `_mine` like any other. So the widening is one line, it is named for
+        what it does, and no row of anybody's data passes through it.
+        """
+        with Session(self._engine) as session:
+            rows = session.exec(select(Connection.org_id).distinct()).all()
+        return sorted(str(row) for row in rows)
+
+    # -- internals -------------------------------------------------------------
+
+    def _connection_row(self, connection_id: str) -> Connection | None:
+        with Session(self._engine) as session:
+            return session.exec(
+                select(Connection).where(
+                    self._mine(Connection), Connection.id == connection_id
+                )
+            ).first()
+
+    def _write_sync_outcome(
+        self,
+        connection_id: str,
+        *,
+        last_sync_at: str | None | object,
+        status: str,
+        error: str | None,
+    ) -> bool:
+        """The one writer of the three sync columns. `False` if no such row.
+
+        `_UNCHANGED` rather than `None` for "leave the timestamp alone",
+        because `None` is a MEANING here -- "this connection has never synced
+        successfully" -- and a sentinel that collided with it would let a
+        failure erase the last good sync instead of merely not advancing it.
+        """
+        with Session(self._engine) as session:
+            row = session.exec(
+                select(Connection).where(
+                    self._mine(Connection), Connection.id == connection_id
+                )
+            ).first()
+            if row is None:
+                return False
+            if last_sync_at is not _UNCHANGED:
+                row.last_sync_at = last_sync_at  # type: ignore[assignment]
+            row.last_sync_status = status
+            row.last_sync_error = error
+            session.add(row)
+            session.commit()
+        return True
+
     # --- joins ----------------------------------------------------------------
 
     def _subjects(
@@ -1672,6 +2005,38 @@ class Repo:
 
 
 # --- helpers ------------------------------------------------------------------
+
+#: "Leave this column exactly as it is." A sentinel rather than `None`, because
+#: `None` already MEANS something on `Connection.last_sync_at` -- "never synced
+#: successfully" -- and a failure that wrote `None` would erase the last good
+#: sync rather than merely declining to advance it.
+_UNCHANGED = object()
+
+
+def _as_connection(row: Connection) -> ConnectionSummary:
+    """The redacted view of a connection row.
+
+    The projection where rule 2 of spec section 3.3 is actually enforced: the
+    ciphertexts are turned into BOOLEANS here, once, so nothing above this
+    module ever holds a shape that could serialise one.
+    """
+    return ConnectionSummary(
+        id=row.id,
+        kind=row.kind,
+        imap_host=row.imap_host,
+        imap_port=row.imap_port,
+        imap_user=row.imap_user,
+        senders=row.senders,
+        folder=row.folder,
+        filename_pattern=row.filename_pattern,
+        has_password=bool(row.secret_ciphertext),
+        has_pdf_password=bool(row.pdf_secret_ciphertext),
+        last_sync_at=row.last_sync_at,
+        last_sync_status=row.last_sync_status,
+        last_sync_error=row.last_sync_error,
+        created_at=row.created_at,
+    )
+
 
 
 def _record_kind(record) -> str:

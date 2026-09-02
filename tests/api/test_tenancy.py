@@ -43,6 +43,10 @@ REAL_FORMATS = REPO_ROOT / "fixtures" / "real-formats"
 UPLOAD_FOR_A = REAL_FORMATS / "razorpay-settlement-dirty.csv"
 UPLOAD_FOR_B = REAL_FORMATS / "hdfc-statement-dirty.csv"
 
+#: A 32-byte AES key, base64. Test material. The vault refuses to store a
+#: credential without one, so the connections walk needs it set.
+BLOB_KEY = "dGVzdC1rZXktZm9yLXRoZS12YXVsdC10ZXN0cy0zMmI="
+
 SECRET = "tenancy-test-signing-key-not-a-real-one"
 PASSWORD = "two-orgs-one-database"
 
@@ -85,6 +89,14 @@ READ_ROUTES: dict[str, str] = {
     # both orgs get 200, and neither response carries an identifier of the
     # other's.
     "/api/connectors": "/api/connectors",
+    # The credential vault's listing (spec 2026-09-02 section 3). Walked here
+    # like every other listing -- 200 with none of the other org's rows -- and
+    # the fixture below seeds one connection per org so that walk is not
+    # vacuous. Tenancy itself is enforced where every other table's is, in
+    # `core/store/repo.py`; `tests/store/test_connections_store.py` proves the
+    # narrower properties an HTTP walk cannot reach, including that another
+    # org's connection is invisible to a DELETE and to a sync-outcome write.
+    "/api/connections": "/api/connections",
 }
 
 #: The three writes. Walked by the disabled-surface proof (they must still work
@@ -104,6 +116,13 @@ WRITE_ROUTES = (
     # through `api/ingest.py` unchanged -- so its tenancy property is the
     # upload one: the rows land under the calling org.
     "/api/connectors/{name}/sync",
+    # The credential vault. `POST /api/connections` stores a secret and the
+    # other two spend it, so all three are org-scoped through the same
+    # repository every write above goes through -- a connection id from
+    # another tenant addresses nothing and answers 404.
+    "/api/connections",
+    "/api/connections/{id}/sync",
+    "/api/connections/{id}/test",
 )
 
 #: Reachable without a session by design; excluded from both walks.
@@ -201,6 +220,28 @@ def upload(client: TestClient, path: Path) -> str:
         "read an empty page and prove nothing"
     )
     return body["upload_id"]
+
+
+def connection(client: TestClient, user: str) -> str:
+    """One stored mailbox connection, and its id.
+
+    The password is an obvious literal and is never asserted about here --
+    `tests/api/test_connections.py` owns the redaction proofs. What this is
+    for is giving the cross-org walk a row of one tenant's to look for in the
+    other's response.
+    """
+    response = client.post(
+        "/api/connections",
+        json={
+            "imap_host": "imap.example.test",
+            "imap_port": 993,
+            "imap_user": user,
+            "password": "not-a-real-app-password",
+            "senders": "statements@bank.example.test",
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["id"]
 
 
 def ids_for(client: TestClient, run_id: str) -> dict[str, str]:
@@ -389,6 +430,7 @@ def two_orgs(tmp_path_factory):
         "RECON_DB_PATH",
         "RECON_DATASETS_DIR",
         "RECON_UPLOADS_DIR",
+        settings.BLOB_KEY_ENV,
         settings.AUTH_ENV,
         settings.SECRET_KEY_ENV,
         settings.USERS_ENV,
@@ -397,6 +439,9 @@ def two_orgs(tmp_path_factory):
     os.environ["RECON_DB_PATH"] = str(tmp / "recon.db")
     os.environ["RECON_DATASETS_DIR"] = str(tmp / "datasets")
     os.environ["RECON_UPLOADS_DIR"] = str(tmp / "uploads")
+    # A credential cannot be stored without one (spec section 3.3 rule 1), and
+    # the connections walk needs a row per org to be worth walking.
+    os.environ[settings.BLOB_KEY_ENV] = BLOB_KEY
     os.environ[settings.AUTH_ENV] = "enabled"
     os.environ[settings.SECRET_KEY_ENV] = SECRET
     verifier = auth.password_hash(PASSWORD)
@@ -447,8 +492,14 @@ def two_orgs(tmp_path_factory):
             a_ids["upload_id"] = upload(client_a, UPLOAD_FOR_A)
             b_ids["upload_id"] = upload(client_b, UPLOAD_FOR_B)
 
+            # One mailbox connection each, so the connections listing has a
+            # row of A's for the leak check to look for in B's response.
+            a_ids["connection_id"] = connection(client_a, "a@acme.test")
+            b_ids["connection_id"] = connection(client_b, "b@globex.test")
+
             assert a_ids["run_id"] != b_ids["run_id"]
             assert a_ids["upload_id"] != b_ids["upload_id"]
+            assert a_ids["connection_id"] != b_ids["connection_id"]
             yield client_a, a_ids, client_b, b_ids
     finally:
         for name, value in previous.items():
@@ -474,6 +525,11 @@ CROSS_ORG_EXPECTATION["/api/uploads"] = 200
 #: connectors this DEPLOYMENT has configured, which is the same answer for
 #: every org and contains no identifier belonging to any of them.
 CROSS_ORG_EXPECTATION["/api/connectors"] = 200
+#: A listing of the caller's own mailbox connections, answered like the two
+#: above: 200, with none of the other org's rows in it. The next test asserts
+#: that on the bytes, and the fixture seeds a connection per org so it has
+#: something to assert about.
+CROSS_ORG_EXPECTATION["/api/connections"] = 200
 
 
 @pytest.mark.parametrize("path", sorted(READ_ROUTES), ids=lambda p: p)
