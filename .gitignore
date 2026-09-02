@@ -23,3 +23,8 @@ incoming/
 # and test_committed_fixtures_are_current.py deliberately excludes it. Ignored
 # so a reflexive `git add -A` cannot silently falsify that claim.
 fixtures/seed42-5000/
+
+# Claude Code local tooling: kept on disk, never published.
+.claude/
+CLAUDE.md
+**/CLAUDE.md
