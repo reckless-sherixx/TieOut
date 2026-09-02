@@ -186,7 +186,12 @@ function ClaimNumber({
 function Invariant({ holds, metrics }: { holds: boolean; metrics: Metrics }) {
   const Icon = holds ? CheckIcon : TriangleAlertIcon;
   return (
-    <p
+    // A <div>, not a <p>. The disclosure below renders <details>, and
+    // <details>/<div>/<p> inside a <p> is invalid HTML: the browser closes the
+    // paragraph early, the server and client trees diverge, and React reports
+    // a hydration error. Caught in the browser, not by tsc or the linter --
+    // neither of them knows what may nest inside what.
+    <div
       className={cn(
         "mt-4 flex max-w-[72ch] items-start gap-2 text-xs leading-relaxed",
         holds ? "text-muted-foreground" : "text-error-fg",
@@ -197,7 +202,9 @@ function Invariant({ holds, metrics }: { holds: boolean; metrics: Metrics }) {
         className={cn("mt-0.5 size-3.5 shrink-0", holds && "text-matched")}
         strokeWidth={2}
       />
-      <span>
+      {/* Also a <div>: <details> is flow content and may not sit inside a
+          <span> either. */}
+      <div className="min-w-0">
         {holds ? (
           <>
             <span className="font-medium text-foreground">
@@ -209,13 +216,11 @@ function Invariant({ holds, metrics }: { holds: boolean; metrics: Metrics }) {
             </span>
             ).
             <Caveat summary="What that equality proves" className="mt-1.5">
-              <p>
-                The two rates are numerator-different — matched, versus matched
-                correctly — so they coincide only while the false-match rate is
-                0. Checked live against the wire on every render rather than
-                asserted in prose, which means a run that broke it would say so
-                here instead of reading like a run that did not.
-              </p>
+              The two rates are numerator-different — matched, versus matched
+              correctly — so they coincide only while the false-match rate is 0.
+              Checked live against the wire on every render rather than asserted
+              in prose, which means a run that broke it would say so here
+              instead of reading like a run that did not.
             </Caveat>
           </>
         ) : (
@@ -234,7 +239,7 @@ function Invariant({ holds, metrics }: { holds: boolean; metrics: Metrics }) {
             the exception list before reading anything else on this page.
           </>
         )}
-      </span>
-    </p>
+      </div>
+    </div>
   );
 }
