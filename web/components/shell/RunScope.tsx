@@ -3,8 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
-import { api, ApiError } from "@/lib/api";
+import { ArrowLeftIcon, FileTextIcon } from "lucide-react";
+import { api, ApiError, API_BASE } from "@/lib/api";
 import { usePoll } from "@/lib/hooks";
 import { formatTimestamp, fullTimestamp } from "@/lib/datetime";
 import { isFromUploads, isTerminal } from "@/lib/labels";
@@ -127,10 +127,37 @@ export function RunScope({
   );
 }
 
+/**
+ * The run as a document.
+ *
+ * This page shows the answer; the report defends it — the derivations, the
+ * denominators, what each rung requires, and what the run cannot tell you. It
+ * is a plain anchor rather than a fetch-and-blob because the browser already
+ * knows how to open a PDF, and a download built in JavaScript is one more
+ * thing that can fail between a reviewer and the evidence.
+ *
+ * Only on a terminal run: a report of a run still executing would describe
+ * numbers that have not been measured.
+ */
+function ReportLink({ runId }: { runId: string }) {
+  return (
+    <a
+      href={`${API_BASE}/api/runs/${encodeURIComponent(runId)}/report.pdf`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="brut-press inline-flex h-8 items-center gap-1.5 border-[length:var(--border-w)] border-[var(--ink)] bg-primary px-2.5 text-xs font-semibold text-primary-foreground focus-visible:focus-ring"
+    >
+      <FileTextIcon aria-hidden className="size-3.5" strokeWidth={2.25} />
+      Report
+    </a>
+  );
+}
+
+
 function RunHeader({ run }: { run: RunSummary }) {
   const terminal = isTerminal(run.state);
   return (
-    <div className="border-b border-border bg-surface">
+    <div className="border-b-[length:var(--border-w)] border-[var(--ink)] bg-surface">
       <div className="mx-auto w-full max-w-[92rem] px-6 lg:px-8">
         <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4 pt-6 pb-5">
           <div className="min-w-0 space-y-3">
@@ -177,11 +204,14 @@ function RunHeader({ run }: { run: RunSummary }) {
               />
             </dl>
           </div>
-          {terminal ? (
-            <StatePill state={run.state} />
-          ) : (
-            <RunProgress runId={run.run_id} state={run.state} />
-          )}
+          <div className="flex shrink-0 items-center gap-3">
+            {terminal ? (
+              <StatePill state={run.state} />
+            ) : (
+              <RunProgress runId={run.run_id} state={run.state} />
+            )}
+            {terminal ? <ReportLink runId={run.run_id} /> : null}
+          </div>
         </div>
         <RunNav runId={run.run_id} />
       </div>
