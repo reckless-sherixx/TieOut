@@ -16,7 +16,7 @@ export function StatePill({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-2xs font-medium",
+        "inline-flex items-center gap-1.5 border-2 border-[var(--ink)] px-2 py-0.5 text-2xs font-semibold",
         state === "failed" && "border-destructive/30 text-destructive",
         state === "running" && "border-brand/40 text-brand",
         className,
@@ -25,7 +25,7 @@ export function StatePill({
       <span
         aria-hidden
         className={cn(
-          "size-1.5 rounded-full",
+          "size-1.5 rounded-none",
           state === "completed" && "bg-foreground/50",
           state === "running" && "animate-pulse bg-brand",
           state === "pending" && "bg-muted-foreground/50",

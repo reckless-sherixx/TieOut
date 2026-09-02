@@ -535,7 +535,7 @@ function DeductionStrip({ batch }: { batch: BatchNetting }) {
 
   return (
     <div className="space-y-3 border-t border-border px-6 py-5">
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+      <div className="flex h-2.5 w-full overflow-hidden rounded-none bg-muted">
         {parts.map((part) => (
           <div
             key={part.key}

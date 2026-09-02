@@ -386,7 +386,7 @@ function VerdictCell({ row }: { row: ReconExceptionDetail }) {
     <span className="inline-flex items-center gap-1.5">
       <span
         className={cn(
-          "inline-flex items-center rounded-full border px-1.5 py-px text-2xs font-medium",
+          "inline-flex items-center rounded-none border px-1.5 py-px text-2xs font-medium",
           row.verifier_verdict === "rejected"
             ? "border-rejected/40 bg-rejected/10 text-rejected-fg"
             : "border-border text-muted-foreground",

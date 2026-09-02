@@ -132,7 +132,7 @@ export function SettlementDetail({
                   </span>
                 </span>
               ) : (
-                <span className="inline-flex items-center rounded-full border border-excepted/60 px-1.5 py-px text-2xs font-medium">
+                <span className="inline-flex items-center rounded-none border border-excepted/60 px-1.5 py-px text-2xs font-medium">
                   Not closed
                 </span>
               )}

@@ -407,7 +407,7 @@ function Rail({
     return (
       <div
         aria-hidden
-        className="h-3 w-full rounded-full border border-dashed border-border"
+        className="h-3 w-full rounded-none border border-dashed border-border"
       />
     );
   }
@@ -437,7 +437,7 @@ function Rail({
 
   return (
     <div
-      className="flex h-3 w-full gap-px overflow-hidden rounded-full bg-muted"
+      className="flex h-3 w-full gap-px overflow-hidden rounded-none bg-muted"
       role="img"
       aria-label={rows
         .map((r) => `${r.label} ${r.value}`)

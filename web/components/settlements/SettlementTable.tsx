@@ -333,7 +333,7 @@ function Row({
           // Not an error and not a gap: an unclosed batch is what a reviewer
           // opens this listing to find. The outcome hue is carried by a 1px
           // border, so the label keeps full text contrast on a selected row.
-          <span className="inline-flex items-center rounded-full border border-excepted/60 px-1.5 py-px text-2xs font-medium">
+          <span className="inline-flex items-center rounded-none border border-excepted/60 px-1.5 py-px text-2xs font-medium">
             Not closed
           </span>
         )}

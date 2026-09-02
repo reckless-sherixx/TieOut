@@ -298,11 +298,11 @@ function TierRow({
         <td className="py-2.5 pr-4 align-middle">
           <div
             aria-hidden
-            className="h-2 w-full overflow-hidden rounded-full bg-muted"
+            className="h-2 w-full overflow-hidden rounded-none bg-muted"
           >
             {/* The "matched" outcome colour, not the accent: the accent is
                 reserved for emphasis and this is a measurement of an outcome. */}
-            <div className="h-full rounded-full bg-matched" style={{ width }} />
+            <div className="h-full rounded-none bg-matched" style={{ width }} />
           </div>
         </td>
 

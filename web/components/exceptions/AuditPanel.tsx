@@ -270,7 +270,7 @@ function HypothesisSection({ row }: { row: ReconExceptionDetail }) {
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={cn(
-                "inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-medium",
+                "inline-flex items-center rounded-none border px-2 py-0.5 text-2xs font-medium",
                 rejected
                   ? "border-rejected/40 bg-rejected/10 text-rejected-fg"
                   : "border-border text-muted-foreground",
@@ -279,7 +279,7 @@ function HypothesisSection({ row }: { row: ReconExceptionDetail }) {
               Verifier: {VERDICT_LABEL[row.verifier_verdict]}
             </span>
             {row.failed_check !== null ? (
-              <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 font-mono text-2xs">
+              <span className="inline-flex items-center rounded-none border border-border px-2 py-0.5 font-mono text-2xs">
                 failed_check = {row.failed_check}
               </span>
             ) : null}

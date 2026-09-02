@@ -44,14 +44,14 @@ export function RunProgress({
       {!isTerminal(current) ? (
         <>
           <div
-            className="h-1 w-full overflow-hidden rounded-full bg-muted"
+            className="h-1 w-full overflow-hidden rounded-none bg-muted"
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(progress * 100)}
           >
             <div
-              className="h-full rounded-full bg-brand transition-[width] duration-300 ease-out"
+              className="h-full rounded-none bg-brand transition-[width] duration-300 ease-out"
               style={{ width: `${Math.round(progress * 100)}%` }}
             />
           </div>
