@@ -112,6 +112,32 @@ class QuarantineReason(str, Enum):
     #: the fixes differ -- "your export is missing a column" against "we do not
     #: read this format yet".
     UNRECOGNISED_FORMAT = "UNRECOGNISED_FORMAT"
+    #: File-level: an adapter accepted the file, parsed it cleanly, and found no
+    #: transaction rows in it.
+    #:
+    #: This exists because on 2026-09-02 two real one-page PDFs sniffed at 0.70
+    #: -- above `DETECTION_THRESHOLD` -- and returned no records AND no
+    #: quarantine rows. `records == [] and quarantined == []` is the one outcome
+    #: this layer says it never has: every other bad input produces a named
+    #: reason, and silence is strictly worse than a visible failure because
+    #: nothing prompts anyone to look. A genuinely empty month gets this reason
+    #: too, and that is correct: "this statement had no transactions" is a
+    #: claim a report can render, and "we found nothing and cannot tell you
+    #: whether that is right" is not.
+    EMPTY_DOCUMENT = "EMPTY_DOCUMENT"
+    #: File-level: the file sniffed above the threshold but nothing in it was
+    #: recognisable as this layout's structure -- no header, no dated row, no
+    #: account line, nothing to parse.
+    #:
+    #: The distinction from `EMPTY_DOCUMENT` is whether the adapter found
+    #: STRUCTURE and no transactions, or found nothing at all. Reserved for an
+    #: adapter that can report that difference about its own parse; the ingest
+    #: boundary cannot infer it from an `AdapterResult`, which carries no signal
+    #: separating "this file had furniture and no rows" from "this file had
+    #: nothing" -- `skipped_rows` looks like one and is not, because a CSV
+    #: adapter that consumed a matching header counts no furniture at all. See
+    #: `api/ingest.enforce_visible_outcome`.
+    NOT_A_STATEMENT = "NOT_A_STATEMENT"
 
 
 @dataclass(frozen=True)

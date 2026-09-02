@@ -342,3 +342,126 @@ def test_detect_refuses_an_empty_registry(tmp_path: Path):
 
     with pytest.raises(FormatDetectionError):
         registry.detect(_file(tmp_path), adapters=[])
+
+
+# --- the silent zero: an accepted file that produced nothing must say why ----
+#
+# Real data, 2026-09-02: two one-page PDFs sniffed at 0.70 -- above
+# `DETECTION_THRESHOLD`, so `slice-pdf-v1` accepted them -- and each produced
+# `records == [] and quarantined == []`. A merchant reconciling a month would
+# have seen "ingested" and never learned the file contributed nothing.
+#
+# The guarantee is enforced at the ingest boundary rather than inside seven
+# adapters, so the eighth inherits it. These tests run over `default_adapters()`
+# for the same reason: an adapter added tomorrow is covered here without anyone
+# remembering to come back.
+
+
+def _empty_result(adapter) -> AdapterResult:
+    return AdapterResult(
+        format_id=adapter.format_id,
+        format_version=adapter.format_version,
+        records=[],
+        quarantined=[],
+        file_sha256="0" * 64,
+        row_hashes=[],
+        encoding="utf-8",
+    )
+
+
+def test_no_adapter_can_reach_the_caller_with_both_lists_empty():
+    """`records == [] and quarantined == []` is never a valid outcome.
+
+    Asserted over every registered adapter, so the guarantee is a property of
+    the layer and not a habit seven modules happen to share.
+    """
+    from api.ingest import enforce_visible_outcome
+    from core.adapters.registry import default_adapters
+
+    registered = default_adapters()
+    assert registered, "the registry is empty, so this test proves nothing"
+
+    for adapter in registered:
+        rows = enforce_visible_outcome(_empty_result(adapter))
+        assert len(rows) == 1, (
+            f"{adapter.format_id} can still return nothing and say nothing"
+        )
+        assert rows[0].reason is QuarantineReason.EMPTY_DOCUMENT
+        assert adapter.format_id in rows[0].detail
+
+
+def test_the_file_level_row_quotes_no_byte_of_the_merchants_file():
+    """The same rule `UploadRefused` follows: a quarantine reason names the
+    format and the outcome, never the content."""
+    from api.ingest import enforce_visible_outcome
+    from core.adapters.registry import default_adapters
+
+    row = enforce_visible_outcome(_empty_result(default_adapters()[0]))[0]
+    assert row.raw == ""
+    assert row.row_number == 1
+
+
+def test_a_result_that_already_says_something_is_passed_through_untouched():
+    """The boundary adds a row only to silence. A file whose every row was
+    quarantined, and one that parsed to records, both come back as they were --
+    otherwise the check would inflate every quarantine count in the product."""
+    from api.ingest import enforce_visible_outcome
+    from core.models import BankLine
+
+    spoke_up = QuarantinedRow(
+        row_number=7,
+        raw="01/08/26,JUNK",
+        reason=QuarantineReason.BAD_DECIMAL,
+        detail="column 'Deposit Amt.'",
+    )
+    only_quarantine = AdapterResult(
+        format_id="bank-csv-hdfc-v1",
+        format_version="1.0",
+        records=[],
+        quarantined=[spoke_up],
+        file_sha256="0" * 64,
+        row_hashes=[],
+        encoding="utf-8",
+    )
+    assert enforce_visible_outcome(only_quarantine) == [spoke_up]
+
+    line = BankLine(
+        line_id="HDFC-00002",
+        txn_date="2026-08-01",
+        narration="NEFT CR-RAZORPAY",
+        credit=100,
+        debit=None,
+        balance=100,
+        utr=None,
+    )
+    only_records = AdapterResult(
+        format_id="bank-csv-hdfc-v1",
+        format_version="1.0",
+        records=[line],
+        quarantined=[],
+        file_sha256="0" * 64,
+        row_hashes=["a" * 64],
+        encoding="utf-8",
+    )
+    assert enforce_visible_outcome(only_records) == []
+
+
+def test_the_two_file_level_reasons_are_stable_strings():
+    """They are on the wire in `api/openapi.yaml` and the quarantine review
+    screen groups on them, so renaming one is a breaking change."""
+    assert QuarantineReason.EMPTY_DOCUMENT.value == "EMPTY_DOCUMENT"
+    assert QuarantineReason.NOT_A_STATEMENT.value == "NOT_A_STATEMENT"
+
+
+def test_openapi_declares_every_quarantine_reason_the_code_can_emit():
+    """The enum is a wire contract. A reason the API can return and the schema
+    does not declare is a response no client can validate."""
+    import re as _re
+
+    spec = (
+        Path(__file__).resolve().parents[2] / "api" / "openapi.yaml"
+    ).read_text(encoding="utf-8")
+    block = _re.search(r"\n    QuarantineReason:\n(.*?)\n    \w", spec, _re.S)
+    assert block is not None, "api/openapi.yaml no longer declares QuarantineReason"
+    declared = set(_re.findall(r"^\s+- ([A-Z_]+)$", block.group(1), _re.M))
+    assert {reason.value for reason in QuarantineReason} == declared

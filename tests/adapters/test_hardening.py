@@ -105,6 +105,10 @@ DETECTED_AS = {
 TEXT_LAYER_FIXTURES = {
     "slice-statement-clean.txt": "slice-pdf-v1",
     "slice-statement-dirty.txt": "slice-pdf-v1",
+    # The silent zero of 2026-09-02: a one-page document with the bank's own
+    # header and no transaction rows, which parsed to nothing and said nothing.
+    # `tests/adapters/test_bank_slice.py` is what exercises it.
+    "slice-statement-empty.txt": "slice-pdf-v1",
 }
 
 

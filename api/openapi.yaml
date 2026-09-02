@@ -2099,6 +2099,8 @@ components:
         - UNDECODABLE_FILE
         - MISSING_HEADER_COLUMN
         - UNRECOGNISED_FORMAT
+        - EMPTY_DOCUMENT
+        - NOT_A_STATEMENT
 
     PaginatedQuarantine:
       description: >

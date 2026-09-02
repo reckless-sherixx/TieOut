@@ -25,12 +25,19 @@ for a reason that is not obvious.**
 3. **Parse.** The adapter's own `parse`, which never raises past a row: a
    malformed row is a `QuarantinedRow` and the file keeps going.
 
-4. **Store the bytes, then the rows.** The blob lands *after* detection
+4. **Store the bytes, then the rows, and never store silence.** The blob lands
+   *after* detection
    succeeds. A file this API refused is not retained: there would be no upload
    row pointing at it, so it could never be listed, reviewed, exported or
    erased -- an unreferenced copy of a merchant's data with no way to find it
    again is the one thing a retention policy cannot describe (COMPLIANCE.md).
    The 422 already tells the merchant everything the file could have told them.
+
+   The rows go through `enforce_visible_outcome` on the way in. A parse that
+   produced no records and no quarantine is a file that was accepted and told
+   nobody it contributed nothing, and that is the one outcome this codebase
+   says it never has. Real data found it on 2026-09-02; the function's
+   docstring carries the case.
 
 **A temporary plaintext file exists, briefly, and it has to.** Every adapter
 takes a path -- they stream, and a 400 MB bank export must not be held in
@@ -57,7 +64,10 @@ from uuid import uuid4
 from core.adapters import registry
 from core.adapters.base import (
     DETECTION_THRESHOLD,
+    AdapterResult,
     FormatDetectionError,
+    QuarantinedRow,
+    QuarantineReason,
     UndecodableFileError,
 )
 from core.store.blobstore import BlobStore
@@ -128,6 +138,70 @@ class UploadRefused(Exception):
 
 class UploadTooLarge(Exception):
     """More bytes than `MAX_UPLOAD_BYTES`. Rendered as a 413."""
+
+
+def enforce_visible_outcome(result: AdapterResult) -> list[QuarantinedRow]:
+    """`result.quarantined`, plus the file-level row a silent parse owes.
+
+    **The rule.** An adapter that accepted a file and produced no records must
+    say why. `records == [] and quarantined == []` is never a valid outcome.
+
+    **Why it exists.** On 2026-09-02 the IMAP connector read a real mailbox for
+    the first time and pulled nine attachments. Two of them were one-page PDFs
+    of roughly 1,200 characters that were not statements at all. Both sniffed at
+    0.70 -- above `DETECTION_THRESHOLD`, because a PDF's magic number is all
+    `slice-pdf-v1` can see at sniff time -- so both were accepted, and both then
+    produced no records and no quarantine row saying why. A merchant
+    reconciling a month would have seen the file ingested successfully and
+    never learned it contributed nothing. 1,475 tests over synthetic data did
+    not find that; the first real file did.
+
+    **Why here and not in the adapters.** This is the single point every upload
+    and every connector sync passes through. Seven adapters would need seven
+    copies of the same check, which is seven chances to drift, and the eighth
+    adapter would start life without the guarantee. It is a property of the
+    layer, and `tests/adapters/test_contract.py` asserts it over
+    `default_adapters()` so a new adapter inherits it rather than having to
+    remember it.
+
+    **Why the reason is always `EMPTY_DOCUMENT`.** The spec names two
+    file-level reasons -- `EMPTY_DOCUMENT` for a file that parsed cleanly and
+    held no transaction rows, `NOT_A_STATEMENT` for one with no parseable
+    structure at all -- and telling them apart needs a signal about the parse
+    that `AdapterResult` does not carry. `skipped_rows` is the only candidate
+    and it is not one: it counts furniture an adapter chose to count, so it is
+    positive for a `slice-pdf-v1` document with a header and no rows and zero
+    for a header-only HDFC CSV, which is an empty document by any reading. The
+    two files that prompted this are `EMPTY_DOCUMENT` on the definition above,
+    and so is every case reachable today, so that is what is emitted rather
+    than a distinction inferred from a signal that is not there.
+    `NOT_A_STATEMENT` stays defined for an adapter that can report the
+    difference about its own parse -- which is where that knowledge lives.
+
+    **It quotes no byte of the file.** `raw` is empty and the detail names the
+    format and the outcome, on the same rule `UploadRefused` follows: the
+    quarantine view is behind a session and a reason string travels further
+    than one.
+    """
+    if result.records or result.quarantined:
+        return list(result.quarantined)
+    return [
+        QuarantinedRow(
+            # Line 1 is the honest answer and the same one
+            # `registry.ingest` gives a file-level failure: the defect is the
+            # file, and line 1 is where a human starts looking.
+            row_number=1,
+            raw="",
+            reason=QuarantineReason.EMPTY_DOCUMENT,
+            detail=(
+                f"{result.format_id} accepted this file and found no "
+                f"transaction rows in it. The file was read, so this is not a "
+                f"format failure -- it is either a statement for a period with "
+                f"no activity or a document that is not a statement at all, "
+                f"and either way it contributed nothing to any run."
+            ),
+        )
+    ]
 
 
 def blob_store() -> BlobStore:
@@ -204,7 +278,10 @@ def ingest_upload(
                 reason=row.reason.value,
                 detail=row.detail,
             )
-            for row in result.quarantined
+            # Step 5. Not `result.quarantined`: a parse that produced nothing
+            # and said nothing gets the file-level row it owes, here, once, for
+            # every adapter and every caller. See `enforce_visible_outcome`.
+            for row in enforce_visible_outcome(result)
         ],
         skipped_rows=result.skipped_rows,
     )

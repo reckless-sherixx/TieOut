@@ -284,12 +284,33 @@ def test_an_empty_export_is_not_the_same_fact_as_a_damaged_one(client):
     """The distinction the console is built on. A header with no data rows
     means the merchant exported the wrong date range; a file whose every row is
     refused means the data is damaged. "0 records" says neither.
+
+    **Where that distinction lives changed on 2026-09-02**, and this test moved
+    with it. Two real one-page PDFs sniffed above the threshold, were accepted,
+    and produced no records AND no quarantine row -- a file ingested
+    successfully that told nobody it had contributed nothing. So
+    `api/ingest.enforce_visible_outcome` now gives an accepted file that
+    produced nothing a file-level `EMPTY_DOCUMENT` row, at the one boundary
+    every upload and every connector sync passes through.
+
+    The consequence is deliberate: an empty export is no longer state `empty`
+    with nothing beside it, it is one quarantine row that SAYS it was empty. The
+    two facts are still two facts -- `EMPTY_DOCUMENT` against `BAD_DECIMAL` and
+    its neighbours -- and the reason code carries the difference the state used
+    to imply, with a sentence a report can render attached to it.
     """
     header = header_of(CLEAN)
     empty = send_bytes(client, "empty.csv", (header + "\n").encode("utf-8")).json()
-    assert empty["state"] == "empty"
     assert empty["record_count"] == 0
-    assert empty["quarantine_count"] == 0
+    assert empty["quarantine_count"] == 1
+    assert empty["state"] == "quarantined"
+
+    rows = client.get(f"/api/uploads/{empty['upload_id']}/quarantine").json()["items"]
+    assert [row["reason"] for row in rows] == ["EMPTY_DOCUMENT"]
+    # The reason names the format and the outcome and quotes no byte of the
+    # file, on the same rule a 422 body follows.
+    assert rows[0]["raw"] == ""
+    assert "no transaction rows" in rows[0]["detail"]
 
     # Same header, one row of pure damage: read, and refused.
     damaged = send_bytes(

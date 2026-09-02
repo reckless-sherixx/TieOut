@@ -628,3 +628,91 @@ def test_a_date_shaped_but_impossible_date_is_quarantined_not_crashed(line):
     assert parsed.records == []
     assert [q.reason for q in parsed.quarantined] == [QuarantineReason.BAD_DATE]
     assert line in parsed.quarantined[0].detail
+
+
+# --- the silent zero, on the shape real data had ----------------------------
+#
+# 2026-09-02: the IMAP connector pulled nine attachments from a real bank. Two
+# were one-page PDFs of roughly 1,200 characters carrying the bank's running
+# header and no transaction rows. They sniffed at 0.70 -- ABOVE
+# `DETECTION_THRESHOLD`, because the magic number says "a PDF" -- so this
+# adapter accepted them, and each returned zero records and zero quarantine
+# rows. Nothing anywhere told the merchant the file had contributed nothing.
+#
+# `fixtures/real-formats/slice-statement-empty.txt` is that shape with every
+# value invented. The first two tests pin the defect at the parser -- which is
+# CORRECT behaviour there, because none of those lines is a damaged row -- and
+# the third shows the ingest boundary turning it into one visible failure.
+
+EMPTY = FIXTURES / "slice-statement-empty.txt"
+
+
+def _empty_statement_lines() -> list[str]:
+    """The fixture's document lines, ready for `_minimal_pdf`.
+
+    Provenance comments are dropped because a PDF has no comment syntax to put
+    them in, and the rupee sign becomes `$` for the reason `SYNTHETIC_PAGES`
+    already does it: a Helvetica content stream is latin-1, and U+20B9 reaches
+    the extracted text through the `/ToUnicode` map instead.
+    """
+    return [
+        line.replace("₹", "$")
+        for line in EMPTY.read_text(encoding="utf-8").splitlines()
+        if not line.startswith("#")
+    ]
+
+
+def test_a_statement_with_no_rows_parses_to_nothing_at_all():
+    """The defect, reproduced. Every line is furniture, so the parser has
+    nothing to report: no records AND no quarantine. Held here so that if a
+    later change makes the parser itself speak up, this test is what says the
+    boundary check has become redundant rather than the two drifting apart."""
+    parsed = validate_balance_chain(parse_text(EMPTY.read_text(encoding="utf-8")))
+    assert parsed.records == []
+    assert parsed.quarantined == []
+    assert parsed.skipped_rows > 0
+
+
+def test_the_same_document_as_a_pdf_is_accepted_by_detection_and_still_says_nothing(
+    tmp_path: Path,
+):
+    """End to end through the real adapter, from a PDF, exactly as the real
+    files arrived: detection clears the threshold and the result is silent.
+
+    The genuine files scored 0.70 because their text layer sits in a compressed
+    content stream, so the anchor was unreachable at sniff time. This one is
+    uncompressed and therefore scores higher -- the score is not what makes it a
+    silent zero, CLEARING THE THRESHOLD is, and that is what is asserted.
+    """
+    from core.adapters.base import DETECTION_THRESHOLD
+
+    path = tmp_path / "0333xxxxxxx1300.pdf"
+    path.write_bytes(_minimal_pdf([_empty_statement_lines()]))
+
+    assert SlicePDFStatementAdapter().sniff(path.read_bytes()[:8192]) >= (
+        DETECTION_THRESHOLD
+    )
+    assert registry.detect(path).format_id == "slice-pdf-v1"
+
+    result = SlicePDFStatementAdapter().parse(path)
+    assert result.records == []
+    assert result.quarantined == []
+
+
+def test_the_ingest_boundary_turns_that_silence_into_one_named_failure(
+    tmp_path: Path,
+):
+    """What the merchant now sees instead of nothing: one file-level
+    `EMPTY_DOCUMENT` row naming the format that read the file and found no
+    transactions in it."""
+    from api.ingest import enforce_visible_outcome
+
+    path = tmp_path / "0333xxxxxxx5081.pdf"
+    path.write_bytes(_minimal_pdf([_empty_statement_lines()]))
+
+    rows = enforce_visible_outcome(SlicePDFStatementAdapter().parse(path))
+    assert len(rows) == 1
+    assert rows[0].reason is QuarantineReason.EMPTY_DOCUMENT
+    assert "slice-pdf-v1" in rows[0].detail
+    # No byte of the document reaches the reason. Same rule as `UploadRefused`.
+    assert rows[0].raw == ""

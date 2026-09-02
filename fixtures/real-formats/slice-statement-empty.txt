@@ -1,0 +1,35 @@
+# FIXTURE -- HAND-WRITTEN. Not produced by core/generator, and no code in
+# core/generator/ may be used to read, regenerate or validate it.
+# Source schema: Slice (small finance bank) PDF account statement, TEXT LAYER.
+# This is not a PDF. It is what `bank_slice.extract_pages` produces from one --
+# one string per page -- so that the parser can be tested without a
+# PDF-writing dependency anywhere in the suite.
+#
+# THE DEFECT THIS FIXTURE EXISTS FOR. On 2026-09-02 the IMAP connector pulled
+# nine attachments from a real bank. Two of them were one-page PDFs of roughly
+# 1,200 characters that carried the bank's own running header and nothing else:
+# no transaction rows at all. They sniffed at 0.70 -- above DETECTION_THRESHOLD,
+# because the magic number says "a PDF" -- so `slice-pdf-v1` accepted them, and
+# both produced ZERO records and ZERO quarantine rows. A merchant would have
+# seen the file ingested successfully and never learned it contributed nothing.
+#
+# This is that SHAPE, in the same layout, with every value invented: the account
+# holder, the masked account number, the period and the balances below came from
+# nobody's account. Nothing here was read off the genuine artefact except the
+# arrangement of the lines, which is what `VALIDATION.md` section 4 already
+# records.
+#
+# Expected: 0 records, 0 quarantine, every line counted as skipped furniture --
+# and therefore exactly ONE file-level EMPTY_DOCUMENT quarantine row once the
+# ingest boundary has had its say. See tests/adapters/test_contract.py.
+01 Apr '25 - 30 Apr '25
+1/1
+slice small finance bank
+Account Statement
+Sample Merchant Name
+Savings Account XXXXXXXX0000
+Statement period 01 Apr '25 to 30 Apr '25
+Opening Balance ₹0
+Closing Balance ₹0
+No transactions were recorded on this account for the selected period.
+This is a computer generated statement and does not require a signature.
