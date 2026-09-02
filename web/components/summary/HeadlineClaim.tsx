@@ -7,6 +7,8 @@ import { formatRate } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { Metrics, RunSummary } from "@/lib/types";
 import { DerivationPanel } from "@/components/summary/DerivationPanel";
+import { Caveat } from "@/components/ui/Caveat";
+import { trapShape } from "@/lib/metric-shape";
 
 /**
  * The run's result, as the one claim it is entitled to make.
@@ -24,6 +26,10 @@ import { DerivationPanel } from "@/components/summary/DerivationPanel";
  * The four are the auto-match rate, recall on resolvable, the false-match
  * rate and the trap-capture rate. They appear in the prose below rather than
  * in a list, because the order they are read in is the argument.
+ *
+ * The two paragraphs that used to follow this sentence are now folded. They
+ * are not gone — they are one interaction away, and still in the DOM — but a
+ * reader arriving at a run wants the claim, not the defence of the claim.
  */
 export function HeadlineClaim({
   run,
@@ -39,6 +45,10 @@ export function HeadlineClaim({
   // numerator-different and coincide exactly while no false match exists.
   const holds =
     Math.abs(metrics.auto_match_rate - metrics.recall_on_resolvable) < 1e-9;
+
+  // `100.0%` of 2 and `100.0%` of 100 are the same string. The denominator is
+  // what tells them apart, and it belongs beside the figure, not in a footnote.
+  const trap = trapShape(metrics);
 
   const number = (key: MetricKey, trailing?: string) => (
     <ClaimNumber
@@ -65,15 +75,25 @@ export function HeadlineClaim({
         {number("auto_match_rate", ",")} and {number("recall_on_resolvable")} of
         them correctly. It asserted {number("false_match_rate")} wrong matches,
         and declined {number("trap_capture_rate")} of the subjects the dataset
-        does <strong className="font-semibold">not</strong> determine.
+        does <strong className="font-semibold">not</strong> determine
+        {trap.denominator ? (
+          <span className="text-muted-foreground">
+            {" "}
+            <span className="tnum text-sm">({trap.denominator})</span>
+          </span>
+        ) : null}
+        .
       </p>
 
-      <p className="mt-5 max-w-[72ch] text-xs leading-relaxed text-muted-foreground">
-        None of those four numbers is a result on its own. An engine that
-        matches nothing scores a false-match rate of 0.0% and a trap-capture
-        rate of 100% — that is measured, not hypothetical. Quote all four or
-        none. Every one of them opens its own arithmetic.
-      </p>
+      <Caveat summary="Why all four, or none">
+        <p>
+          None of those four numbers is a result on its own. An engine that
+          matches nothing scores a false-match rate of 0.0% and a trap-capture
+          rate of 100% — that is measured, not hypothetical. Quote all four or
+          none. Every one of them opens its own arithmetic.
+        </p>
+        {trap.caveat ? <p>{trap.caveat}</p> : null}
+      </Caveat>
 
       <Invariant holds={holds} metrics={metrics} />
 
@@ -183,13 +203,20 @@ function Invariant({ holds, metrics }: { holds: boolean; metrics: Metrics }) {
             <span className="font-medium text-foreground">
               Invariant holds.
             </span>{" "}
-            The auto-match rate and recall on resolvable are equal
-            (
+            Auto-match and recall on resolvable are equal (
             <span className="tnum font-mono">
               {formatRate(metrics.auto_match_rate, 4)}
             </span>
-            ). They are numerator-different — matched, versus matched correctly
-            — and coincide only while the false-match rate is 0.
+            ).
+            <Caveat summary="What that equality proves" className="mt-1.5">
+              <p>
+                The two rates are numerator-different — matched, versus matched
+                correctly — so they coincide only while the false-match rate is
+                0. Checked live against the wire on every render rather than
+                asserted in prose, which means a run that broke it would say so
+                here instead of reading like a run that did not.
+              </p>
+            </Caveat>
           </>
         ) : (
           <>

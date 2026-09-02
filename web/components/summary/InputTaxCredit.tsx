@@ -1,6 +1,7 @@
 "use client";
 
 import { type MetricKey } from "@/lib/derivations";
+import { Caveat } from "@/components/ui/Caveat";
 import { formatINR } from "@/lib/money";
 import type { Metrics, RunSummary } from "@/lib/types";
 import { MetricDisclosure } from "@/components/metrics/MetricDisclosure";
@@ -50,12 +51,16 @@ export function InputTaxCredit({
         </h2>
         <p className="max-w-[72ch] text-xs leading-relaxed text-muted-foreground">
           GST the run can stand behind, GST it cannot, and the signed gap
-          against the PSP&apos;s own tax invoices. These are the only figures on
-          this page denominated in money rather than in a ratio, and they are
-          coupled to the match rate rather than parallel to it: a settlement the
-          engine fails to close carries its GST out of the substantiated column
-          and into the at-risk one.
+          against the PSP&apos;s own tax invoices.
         </p>
+        <Caveat summary="Why these move with the match rate">
+          <p>
+            These are the only figures on this page denominated in money rather
+            than in a ratio, and they are coupled to the match rate rather than
+            parallel to it: a settlement the engine fails to close carries its
+            GST out of the substantiated column and into the at-risk one.
+          </p>
+        </Caveat>
       </div>
 
       <MetricDisclosure
@@ -70,17 +75,25 @@ export function InputTaxCredit({
         Substantiated and at risk sum to{" "}
         <span className="money font-medium text-foreground">
           {formatINR(considered)}
-        </span>{" "}
-        — every rupee of GST this run considered, each of which is either
-        evidenced by a matched settlement and covered by an invoice, or is not.
-        That is arithmetic on this page rather than a field on the wire. Per
-        period the engine holds it to{" "}
-        <code className="font-mono">
-          substantiated + at_risk == max(computed, invoiced)
-        </code>
-        , and neither operand of that maximum is on this contract, so the
-        identity is named here and checked in the engine&apos;s own tests.
+        </span>
+        {" "}— every rupee of GST this run considered.
       </p>
+
+      <Caveat summary="Where that total comes from, and what checks it">
+        <p>
+          Each of those rupees is either evidenced by a matched settlement and
+          covered by an invoice, or is not. The sum is arithmetic performed on
+          this page rather than a field on the wire.
+        </p>
+        <p>
+          Per period the engine holds it to{" "}
+          <code className="font-mono">
+            substantiated + at_risk == max(computed, invoiced)
+          </code>
+          , and neither operand of that maximum is on this contract — so the
+          identity is named here and checked in the engine&apos;s own tests.
+        </p>
+      </Caveat>
     </section>
   );
 }

@@ -260,6 +260,16 @@ function StandingLimits({
   );
 }
 
+/**
+ * One standing limit: the claim visible, the argument folded.
+ *
+ * These five are the most valuable prose on the page and they were also the
+ * heaviest — around 250 words in five stacked paragraphs, at the bottom of a
+ * page a reviewer had already read 400 words of. Every title still reads as a
+ * complete admission on its own, so the list scans as five limitations rather
+ * than as an essay, and nothing is removed: the body is one click away and
+ * stays in the DOM for ctrl-F and for print.
+ */
 function Limit({
   title,
   children,
@@ -269,10 +279,14 @@ function Limit({
 }) {
   return (
     <li className="border-l border-border pl-4">
-      <p className="text-xs font-medium">{title}</p>
-      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-        {children}
-      </p>
+      <details className="group">
+        <summary className="cursor-pointer list-none text-xs font-medium underline decoration-dotted decoration-border underline-offset-4 focus-visible:focus-ring [&::-webkit-details-marker]:hidden">
+          {title}
+        </summary>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+          {children}
+        </p>
+      </details>
     </li>
   );
 }

@@ -26,7 +26,7 @@ export default function TiersPage() {
     <div className="space-y-14">
       <ViewIntro
         title="Matches by tier"
-        lede="Four deterministic rungs and one assisted, run in order, with a subject removed from the pool the moment an earlier rung claims it. Each row carries the rule that rung applies and the defect classes that reach it. All five render, including the ones that produced nothing — a rung that matched nothing is a result, and an absent row would be a silence."
+        lede="Four deterministic rungs and one assisted, run in order. A subject leaves the pool the moment an earlier rung claims it."
       />
 
       {run.metrics ? (
@@ -40,11 +40,8 @@ export default function TiersPage() {
                 What each rung produced
               </h2>
               <p className="max-w-[72ch] text-xs leading-relaxed text-muted-foreground">
-                Open any row for what that rung requires field by field, what
-                makes a line fall through it, and the defect classes it resolves.
-                Bars are scaled to the largest rung rather than to the total: the
-                distribution is lopsided by construction, and scaling to the
-                total would round the small rungs to nothing.
+                Open any row for the rule that rung applies, the confidence the
+                engine stamped on it, and what makes a line fall through.
               </p>
             </div>
 

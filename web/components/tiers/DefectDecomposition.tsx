@@ -9,6 +9,7 @@ import {
   REFERENCE_TIER_COUNTS,
   type TierKey,
 } from "@/lib/tiers";
+import { Caveat } from "@/components/ui/Caveat";
 import { cn } from "@/lib/utils";
 import type { Metrics } from "@/lib/types";
 
@@ -103,16 +104,17 @@ export function DefectDecomposition({
         </h2>
         <p className="max-w-[72ch] text-xs leading-relaxed text-muted-foreground">
           The generator injects ten labelled defect classes, and the tier
-          distribution lands on them with nothing left over. Everything in this
-          table is a measurement of seed{" "}
-          <span className="tnum">{REFERENCE_SEED}</span> at{" "}
-          <span className="tnum">{int(REFERENCE_RECORDS)}</span> records, run
-          deterministic-only — <span className="text-foreground">not</span> of
-          the run you are looking at. Nothing on the wire attributes a match to a
-          defect class, so no console can compute this live, and inventing it
-          would be worse than naming its source.
+          distribution lands on them with nothing left over.
         </p>
       </div>
+
+      <Caveat summary={`The decomposition table — reference data, seed ${REFERENCE_SEED} at ${int(REFERENCE_RECORDS)} records, not this run`}>
+        <p>
+          Nothing on the wire attributes a match to a defect class, so no
+          console can compute this live. Naming its source is better than
+          inventing it, and folding it keeps a measurement of a different
+          dataset from reading as a measurement of the run on screen.
+        </p>
 
       <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full min-w-[46rem] border-collapse text-left">
@@ -217,6 +219,7 @@ export function DefectDecomposition({
         that carries one. The rules above hold for any run; the counts beside
         them are one dataset&apos;s.
       </p>
+      </Caveat>
     </section>
   );
 }
