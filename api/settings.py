@@ -106,6 +106,16 @@ IMAP_PASSWORD_ENV = "RECON_IMAP_PASSWORD"
 IMAP_SENDERS_ENV = "RECON_IMAP_SENDERS"
 IMAP_FOLDER_ENV = "RECON_IMAP_FOLDER"
 
+#: An optional regular expression over attachment FILENAMES. When set, only
+#: matching attachments are fetched. `statement` is the obvious value.
+#:
+#: It exists because sender filtering is too coarse a control for a personal
+#: mailbox: a bank mails a merchant's credit report from the same address it
+#: mails their statements, and on 2026-09-02 that is exactly what arrived.
+#: `core/connectors/imap_mailbox.CREDIT_REPORT_DENY` covers the bureaus
+#: unconditionally; this is how a merchant narrows the rest.
+IMAP_FILENAME_PATTERN_ENV = "RECON_IMAP_FILENAME_PATTERN"
+
 #: The password Indian banks put on a statement PDF. A secret like any other.
 PDF_PASSWORD_ENV = "RECON_PDF_PASSWORD"
 
@@ -469,6 +479,7 @@ def imap_settings() -> dict:
         "sender_filter": _optional(IMAP_SENDERS_ENV) or "",
         "folder": _optional(IMAP_FOLDER_ENV) or "INBOX",
         "pdf_password": _optional(PDF_PASSWORD_ENV),
+        "filename_pattern": _optional(IMAP_FILENAME_PATTERN_ENV),
     }
 
 

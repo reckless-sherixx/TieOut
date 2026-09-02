@@ -25,6 +25,13 @@ identical whether or not they hold:
 3. **Attachment filenames are attacker-controlled** -- they are whatever the
    sender typed -- and reach a filesystem path downstream, so `sanitise_filename`
    flattens every one of them before it becomes a `suggested_name`.
+4. **A credit report is never fetched.** `CREDIT_REPORT_DENY` is applied to
+   every attachment name always, and the optional
+   `RECON_IMAP_FILENAME_PATTERN` narrows further on top of it. Both are
+   decided BEFORE the payload is decoded, because filtering at quarantine is
+   too late: by then the file has been read out of the mailbox, decrypted in
+   memory and written to the blob store. Whatever is declined is COUNTED and
+   NAMED in `last_skipped` -- never silently dropped.
 
 **Encrypted PDFs.** Indian bank statement PDFs arrive password-protected as a
 matter of course, and `slice-pdf-v1` reads a text layer it cannot reach through
@@ -64,6 +71,36 @@ DEFAULT_FOLDER = "INBOX"
 #: `.docx` -- would land in the quarantine queue every month and teach a
 #: merchant that quarantine is noise.
 STATEMENT_SUFFIXES = (".pdf", ".csv", ".xls", ".xlsx", ".txt", ".sta")
+
+#: Filenames that are never fetched, whatever else is configured.
+#:
+#: On 2026-09-02 `sliceCIBILReportLatest.pdf` -- 326 KB -- came down with the
+#: statements, because the sender filter matches everything from the bank's
+#: address and the bank mails credit reports from that same address. It failed
+#: to decrypt and landed in quarantine, so nothing leaked into a run; but a
+#: CIBIL report -- score, loan history, enquiries -- has no business entering a
+#: reconciliation process at all, and by the time it is quarantined it has been
+#: read out of the mailbox, decrypted in memory and written to the blob store.
+#: Sender filtering alone is too coarse a control for a personal mailbox.
+#:
+#: India-specific by design: CIBIL, Experian, Equifax and CRIF High Mark are the
+#: four credit bureaus operating in India, and this is an India-first product.
+#: Matched as a case-insensitive substring of the filename, because a bureau's
+#: name appears in the middle of one (`sliceCIBILReportLatest.pdf`) as readily
+#: as at the start.
+#:
+#: **This is not configuration.** `filename_pattern` is the merchant narrowing
+#: what they want fetched; it is not a way to opt back in to a credit report,
+#: and this list is applied after it for that reason.
+CREDIT_REPORT_DENY = (
+    "cibil",
+    "creditreport",
+    "credit_report",
+    "credit-report",
+    "experian",
+    "equifax",
+    "crif",
+)
 
 #: IMAP dates are `DD-Mon-YYYY` with English month abbreviations. Spelled out
 #: rather than taken from `strftime("%b")`, which is locale-dependent: a server
@@ -119,6 +156,18 @@ def is_statement_attachment(part: Message) -> bool:
     return name.endswith(STATEMENT_SUFFIXES)
 
 
+def is_credit_report(filename: str | None) -> bool:
+    """Whether this attachment name is a credit bureau's report.
+
+    Substring, case-folded, against `CREDIT_REPORT_DENY`. Deliberately blunt:
+    the cost of a false positive is a merchant renaming a statement that has the
+    word `cibil` in it, and the cost of a false negative is a credit history in
+    a reconciliation pipeline. Those are not the same size.
+    """
+    name = (filename or "").lower()
+    return any(marker in name for marker in CREDIT_REPORT_DENY)
+
+
 def decrypt_pdf(payload: bytes, password: str | None) -> bytes:
     """Decrypted PDF bytes, or `payload` unchanged when that is not possible.
 
@@ -162,6 +211,7 @@ class ImapMailboxConnector:
         sender_filter: str | None = None,
         folder: str = DEFAULT_FOLDER,
         pdf_password: str | None = None,
+        filename_pattern: str | None = None,
         imap_factory: ImapFactory | None = None,
     ):
         self._host = host
@@ -172,6 +222,39 @@ class ImapMailboxConnector:
         self._folder = folder or DEFAULT_FOLDER
         self._pdf_password = pdf_password
         self._factory = imap_factory or imaplib.IMAP4_SSL
+
+        #: Attachment names this connector declined on the last `fetch`.
+        #:
+        #: **Counted and named, never silently dropped** -- the same argument
+        #: the ingest boundary makes about a file that produced nothing: an
+        #: attachment the fetcher declined is a fact the merchant is entitled
+        #: to, and a file that vanishes with no record is indistinguishable
+        #: from one the bank never sent.
+        #:
+        #: **Why an attribute and not a return value.** `fetch` returns
+        #: `list[FetchedFile]` by the `SourceConnector` protocol, and widening
+        #: it would reach `api/connectors.py`, which another lane owns this
+        #: session. The trade-off is real and worth naming: an attribute is
+        #: per-instance mutable state on a connector that is otherwise
+        #: stateless, so it is reset at the top of every `fetch` and is only
+        #: meaningful to the caller that made the call. When the sync result
+        #: grows a `skipped_names` field, this should become part of the return
+        #: and the attribute should go.
+        self.last_skipped: list[str] = []
+
+        #: Compiled here so a bad pattern is one error, but NOT raised here:
+        #: `api/settings.connectors()` constructs every connector on requests
+        #: that have nothing to do with mail, and a typo in one variable must
+        #: not take the connector list down with it. `fetch` raises instead,
+        #: naming the variable, which is where the merchant is asking for the
+        #: thing that cannot be done.
+        self._pattern = None
+        self._pattern_error: str | None = None
+        if filename_pattern:
+            try:
+                self._pattern = re.compile(filename_pattern, re.IGNORECASE)
+            except re.error as error:
+                self._pattern_error = str(error)
 
     def available(self) -> bool:
         """Whether a mailbox is configured at all.
@@ -195,6 +278,16 @@ class ImapMailboxConnector:
                 "Searching a mailbox unfiltered would download every message "
                 "in the window, which is not a reconciliation input."
             )
+        if self._pattern_error is not None:
+            raise ConnectorUnconfigured(
+                f"RECON_IMAP_FILENAME_PATTERN is not a valid regular "
+                f"expression ({self._pattern_error}). It is optional -- unset "
+                f"it to fetch every statement attachment -- but a mailbox is "
+                f"not searched on a pattern nobody can compile."
+            )
+
+        # Per fetch, not cumulative: this reports what THIS call declined.
+        self.last_skipped = []
 
         connection = self._factory(self._host, self._port)
         try:
@@ -267,11 +360,32 @@ class ImapMailboxConnector:
         for part in message.walk():
             if not is_statement_attachment(part):
                 continue
+            raw_name = part.get_filename()
+            if not self._wanted(raw_name):
+                # Declined BEFORE `get_payload(decode=True)`, which is the whole
+                # point: nothing beyond what walking the MIME tree already
+                # required is read, the base64 is never decoded, the PDF
+                # password is never applied to it, and no copy of it is made.
+                # Quarantining a credit report is too late; this is not.
+                self.last_skipped.append(sanitise_filename(raw_name, "attachment"))
+                continue
             payload = part.get_payload(decode=True)
             if payload is None:
                 continue
-            out.append((part.get_filename(), payload))
+            out.append((raw_name, payload))
         return out
+
+    def _wanted(self, filename: str | None) -> bool:
+        """Whether this attachment is fetched at all.
+
+        Two filters, and the order is the argument. The merchant's optional
+        pattern narrows what they want; the deny list then applies REGARDLESS,
+        because it is not configuration and a pattern is not a way to opt back
+        in to a credit report.
+        """
+        if self._pattern is not None and not self._pattern.search(filename or ""):
+            return False
+        return not is_credit_report(filename)
 
     @staticmethod
     def _hang_up(connection) -> None:

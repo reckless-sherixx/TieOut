@@ -323,3 +323,193 @@ def test_a_password_never_reaches_an_exception_message():
     fake = FakeIMAP({"7": _message([("aug.pdf", "application/pdf", "attachment", payload)])})
     files = _connector(fake, pdf_password="hunter2").fetch(*AUGUST)
     assert files[0].content == payload
+
+
+# --- what is never fetched at all ---------------------------------------------
+#
+# 2026-09-02, on a real mailbox: `sliceCIBILReportLatest.pdf` -- 326 KB -- came
+# down with the statements, because the sender filter matches everything from
+# the bank's address and the bank sends credit reports from that same address.
+# It failed to decrypt and landed in quarantine, so nothing leaked into a run.
+#
+# Quarantining it is still too late. By then it has been read out of the
+# mailbox, decrypted in memory and written to the blob store. A CIBIL report --
+# score, loan history, enquiries -- has no business entering a reconciliation
+# process at all, so the filter belongs at fetch. Sender filtering alone is too
+# coarse a control for a personal mailbox.
+
+CIBIL = "sliceCIBILReportLatest.pdf"
+STATEMENT = "slicebanksavingsstatement-Jul2026.pdf"
+
+
+def _both_attachments() -> bytes:
+    return _message([
+        (STATEMENT, "application/pdf", "attachment", b"%PDF-1.4 statement"),
+        (CIBIL, "application/pdf", "attachment", b"%PDF-1.4 credit report"),
+    ])
+
+
+def test_a_credit_report_is_never_fetched_even_from_a_matching_sender():
+    fake = FakeIMAP({"7": _both_attachments()})
+    connector = _connector(fake)
+    files = connector.fetch(*AUGUST)
+    assert [f.suggested_name for f in files] == [STATEMENT]
+    assert b"credit report" not in b"".join(f.content for f in files)
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "sliceCIBILReportLatest.pdf",
+        "cibil.pdf",
+        "CIBIL-2026.pdf",
+        "my_creditreport.pdf",
+        "credit_report_jul.pdf",
+        "credit-report-jul.pdf",
+        "Experian-Score.pdf",
+        "equifax_summary.pdf",
+        "CRIF-highmark.pdf",
+    ],
+)
+def test_the_deny_list_is_case_insensitive_and_matches_anywhere_in_the_name(filename):
+    """India-specific by design: this is an India-first product and these are
+    the four bureaus a merchant's bank actually mails them reports from."""
+    fake = FakeIMAP({
+        "7": _message([(filename, "application/pdf", "attachment", b"%PDF-1.4 x")]),
+    })
+    connector = _connector(fake)
+    assert connector.fetch(*AUGUST) == []
+    assert len(connector.last_skipped) == 1
+
+
+def test_a_skipped_attachment_is_counted_and_named_rather_than_dropped():
+    """The same argument as the silent zero: an attachment the fetcher declined
+    is a fact the merchant is entitled to. A file that vanishes with no record
+    is indistinguishable from one the bank never sent."""
+    fake = FakeIMAP({"7": _both_attachments()})
+    connector = _connector(fake)
+    connector.fetch(*AUGUST)
+    assert connector.last_skipped == [CIBIL]
+
+
+def test_the_skipped_list_is_per_fetch_and_not_cumulative():
+    fake = FakeIMAP({"7": _both_attachments()})
+    connector = _connector(fake)
+    connector.fetch(*AUGUST)
+    connector.fetch(*AUGUST)
+    assert connector.last_skipped == [CIBIL]
+
+
+def test_a_skipped_name_is_sanitised_like_every_other_attachment_name():
+    """It is still a sender-controlled string and it still reaches a screen."""
+    fake = FakeIMAP({
+        "7": _message([
+            ("../../etc/cibil.pdf", "application/pdf", "attachment", b"%PDF-1.4 x"),
+        ]),
+    })
+    connector = _connector(fake)
+    connector.fetch(*AUGUST)
+    assert connector.last_skipped == ["cibil.pdf"]
+
+
+def test_a_denied_attachment_is_never_decrypted_or_copied(monkeypatch):
+    """"Skipped" has to mean skipped. The deny check runs before the payload is
+    decoded, so the bytes of a credit report never reach `decrypt_pdf`, the PDF
+    password is never applied to them, and no copy of them is made."""
+    from core.connectors import imap_mailbox
+
+    seen: list[bytes] = []
+
+    def spy(payload, password):
+        seen.append(payload)
+        return payload
+
+    monkeypatch.setattr(imap_mailbox, "decrypt_pdf", spy)
+    fake = FakeIMAP({"7": _both_attachments()})
+    _connector(fake, pdf_password="statement-pw").fetch(*AUGUST)
+
+    assert seen == [b"%PDF-1.4 statement"]
+
+
+# --- the optional filename pattern --------------------------------------------
+
+
+def test_no_pattern_admits_everything_the_deny_list_allows():
+    fake = FakeIMAP({
+        "7": _message([("anything-at-all.pdf", "application/pdf", "attachment", b"%PDF-x")]),
+    })
+    connector = _connector(fake, filename_pattern=None)
+    assert [f.suggested_name for f in connector.fetch(*AUGUST)] == ["anything-at-all.pdf"]
+    assert connector.last_skipped == []
+
+
+def test_a_statement_pattern_admits_the_statement_and_rejects_the_credit_report():
+    """`statement` is the obvious value, and this is what it buys."""
+    fake = FakeIMAP({"7": _both_attachments()})
+    connector = _connector(fake, filename_pattern="statement")
+    assert [f.suggested_name for f in connector.fetch(*AUGUST)] == [STATEMENT]
+    assert connector.last_skipped == [CIBIL]
+
+
+def test_the_pattern_is_a_regex_and_not_a_glob():
+    fake = FakeIMAP({
+        "7": _message([
+            ("aug-2026.pdf", "application/pdf", "attachment", b"%PDF-a"),
+            ("summary.pdf", "application/pdf", "attachment", b"%PDF-b"),
+        ]),
+    })
+    connector = _connector(fake, filename_pattern=r"^\w+-\d{4}\.pdf$")
+    assert [f.suggested_name for f in connector.fetch(*AUGUST)] == ["aug-2026.pdf"]
+    assert connector.last_skipped == ["summary.pdf"]
+
+
+def test_the_pattern_is_matched_case_insensitively():
+    fake = FakeIMAP({
+        "7": _message([(STATEMENT.upper(), "application/pdf", "attachment", b"%PDF-x")]),
+    })
+    connector = _connector(fake, filename_pattern="statement")
+    assert len(connector.fetch(*AUGUST)) == 1
+
+
+def test_the_deny_list_wins_over_a_pattern_that_would_admit_a_credit_report():
+    """The deny list is not configuration. A pattern is the merchant narrowing
+    what they want; it is not a way to opt back in to a credit report."""
+    fake = FakeIMAP({"7": _both_attachments()})
+    # A pattern that admits both attachments, so the deny list is the only
+    # thing that can separate them.
+    connector = _connector(fake, filename_pattern=r"\.pdf$")
+    assert [f.suggested_name for f in connector.fetch(*AUGUST)] == [STATEMENT]
+    assert connector.last_skipped == [CIBIL]
+
+
+def test_a_pattern_that_is_not_a_regex_names_the_variable_and_refuses():
+    """A mailbox is not searched on a pattern nobody could compile, and the
+    message names the variable to fix -- never a credential, and never the
+    mailbox."""
+    from core.connectors.base import ConnectorUnconfigured
+
+    connector = _connector(FakeIMAP({}), filename_pattern="statement(")
+    with pytest.raises(ConnectorUnconfigured) as exc:
+        connector.fetch(*AUGUST)
+    message = str(exc.value)
+    assert "RECON_IMAP_FILENAME_PATTERN" in message
+    assert "app-password" not in message
+
+
+def test_the_pattern_is_wired_from_the_environment_into_the_connector(monkeypatch):
+    """The seam between `api/settings.py` and this constructor.
+
+    A settings dict that drifted from the connector's keywords would not fail
+    here in a test, it would fail at a merchant's first sync -- so the dict is
+    handed to the real registry rather than inspected.
+    """
+    from api import settings
+    from core.connectors.registry import default_connectors
+
+    monkeypatch.setenv(settings.IMAP_FILENAME_PATTERN_ENV, "statement")
+    options = settings.imap_settings()
+    assert options["filename_pattern"] == "statement"
+
+    built = default_connectors(imap=options)["imap-mailbox"]
+    assert built.name == "imap-mailbox"
+    assert built.last_skipped == []
