@@ -996,6 +996,23 @@ class Repo:
             size=size,
         )
 
+    def all_matches(self, run_id: str) -> list[MatchGroup]:
+        """Every match of one run, unpaged.
+
+        `matches_page` exists because a console renders fifty rows at a time.
+        This exists because an AGGREGATE over the run -- the confidence each
+        tier stamped -- is wrong if it is computed from a page. Reading page 1
+        of 500-record run and reporting "the LLM tier stamps 0.70" would be a
+        claim about fifty matches presented as a claim about the run.
+        """
+        with Session(self._engine) as session:
+            rows = session.exec(
+                select(Match)
+                .where(self._mine(Match), Match.run_id == run_id)
+                .order_by(col(Match.match_id))
+            ).all()
+        return [MatchGroup.model_validate_json(row.payload) for row in rows]
+
     def records_page(
         self, run_id: str, source: str, page: int = 1, size: int = 50
     ) -> RecordsPage:

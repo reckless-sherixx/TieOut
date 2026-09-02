@@ -1003,6 +1003,27 @@ components:
         - $ref: "#/components/schemas/PSPTransaction"
         - $ref: "#/components/schemas/BankLine"
 
+    TierConfidence:
+      type: object
+      description: >
+        One tier's confidence on one run. Both fields are how a consumer tells
+        "this rung did not fire" from "this rung disagrees with itself".
+      required: [confidence_observed, confidence_conflict]
+      additionalProperties: false
+      properties:
+        confidence_observed:
+          type: number
+          nullable: true
+          description: >
+            The single confidence every match from this tier carried. Null when
+            the tier produced no matches, and null when it produced matches at
+            two different confidences — a set of two values has no single
+            representative, and reporting one would be a true statement about
+            some of them and a false statement about the rest.
+        confidence_conflict:
+          type: boolean
+          description: >
+            True only in the second of those two cases.
     Metrics:
       type: object
       description: Mirrors core/models.py:Metrics. Rates are 0.0-1.0.
@@ -1037,6 +1058,15 @@ components:
           type: number
         trap_capture_rate:
           type: number
+        total_traps:
+          type: integer
+          nullable: true
+          description: >
+            The denominator trap_capture_rate divided by — the count of subjects
+            this dataset deliberately does not determine. It is 2 at 50 records
+            and 10 at 500, and without it "100.0%" of 2 renders exactly like
+            "100.0%" of 100. Null on a run stored before this field existed,
+            which means "not recorded" and never "zero traps".
         llm_rejection_rate:
           type: number
         throughput_records_per_sec:
@@ -1046,6 +1076,25 @@ components:
           description: "USD per 100 records. Not a paise field — this is a dollar cost metric."
         llm_tokens_per_100:
           type: integer
+        tier_confidence:
+          type: object
+          description: >
+            The confidence the engine stamped on this run's matches, per tier.
+            Derived from the run's own MatchGroup rows, never from a table: the
+            console previously carried a hardcoded copy of these values and it
+            drifted, rendering the word "verified" on the LLM rung where the
+            engine stamps 0.70.
+
+            All five keys are ALWAYS present, for the same reason tier_counts
+            carries all five.
+          required: [T0, T1, T2, T3, LLM]
+          additionalProperties: false
+          properties:
+            T0: { $ref: '#/components/schemas/TierConfidence' }
+            T1: { $ref: '#/components/schemas/TierConfidence' }
+            T2: { $ref: '#/components/schemas/TierConfidence' }
+            T3: { $ref: '#/components/schemas/TierConfidence' }
+            LLM: { $ref: '#/components/schemas/TierConfidence' }
         tier_counts:
           type: object
           description: >

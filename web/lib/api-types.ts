@@ -480,6 +480,13 @@ export interface components {
         };
         /** @description The record an exception or a match is about. Exactly one of the three spec §6.2 input shapes. Narrow on the sibling `subject_type` field: "order" → Order, "psp_txn" → PSPTransaction, "bank_line" → BankLine. There is no discriminator property inside the records themselves, so the subject_type is the only reliable tag — do not sniff fields. */
         SubjectRecord: components["schemas"]["Order"] | components["schemas"]["PSPTransaction"] | components["schemas"]["BankLine"];
+        /** @description One tier's confidence on one run. Both fields are how a consumer tells "this rung did not fire" from "this rung disagrees with itself". */
+        TierConfidence: {
+            /** @description The single confidence every match from this tier carried. Null when the tier produced no matches, and null when it produced matches at two different confidences — a set of two values has no single representative, and reporting one would be a true statement about some of them and a false statement about the rest. */
+            confidence_observed: number | null;
+            /** @description True only in the second of those two cases. */
+            confidence_conflict: boolean;
+        };
         /** @description Mirrors core/models.py:Metrics. Rates are 0.0-1.0. */
         Metrics: {
             auto_match_rate: number;
@@ -489,11 +496,24 @@ export interface components {
             precision: number;
             recall_on_resolvable: number;
             trap_capture_rate: number;
+            /** @description The denominator trap_capture_rate divided by — the count of subjects this dataset deliberately does not determine. It is 2 at 50 records and 10 at 500, and without it "100.0%" of 2 renders exactly like "100.0%" of 100. Null on a run stored before this field existed, which means "not recorded" and never "zero traps". */
+            total_traps?: number | null;
             llm_rejection_rate: number;
             throughput_records_per_sec: number;
             /** @description USD per 100 records. Not a paise field — this is a dollar cost metric. */
             llm_cost_usd_per_100: number;
             llm_tokens_per_100: number;
+            /**
+             * @description The confidence the engine stamped on this run's matches, per tier. Derived from the run's own MatchGroup rows, never from a table: the console previously carried a hardcoded copy of these values and it drifted, rendering the word "verified" on the LLM rung where the engine stamps 0.70.
+             *     All five keys are ALWAYS present, for the same reason tier_counts carries all five.
+             */
+            tier_confidence?: {
+                T0: components["schemas"]["TierConfidence"];
+                T1: components["schemas"]["TierConfidence"];
+                T2: components["schemas"]["TierConfidence"];
+                T3: components["schemas"]["TierConfidence"];
+                LLM: components["schemas"]["TierConfidence"];
+            };
             /**
              * @description Matches produced per tier, taken from the engine's own tier assignment (MatchGroup.tier). Powers the run-detail match-rate breakdown by tier (spec §13 #2).
              *     All five keys are ALWAYS present. A tier that scored nothing is 0, never an omitted key — "T1: 0" and "we do not know what T1 did" are different claims, and only the first one is renderable. Render every key, including the zeros.

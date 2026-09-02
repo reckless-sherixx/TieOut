@@ -18,6 +18,7 @@ each body against `api/openapi.yaml` itself.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import (
@@ -33,7 +34,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from core.drift.compare import compare
-from core.models import ReasonCode
+from core.models import MatchGroup, ReasonCode
 from core.store.repo import RecordSource, Repo
 
 from api import settings
@@ -254,6 +255,41 @@ def list_runs(repo: RepoDep) -> list[dict]:
     return [summary.model_dump(mode="json") for summary in repo.list_runs()]
 
 
+#: Every tier key, always, for the same reason `tier_counts` carries all five:
+#: a missing key reads as "we do not know", which is a different claim from
+#: "this rung produced nothing".
+_TIER_KEYS = ("T0", "T1", "T2", "T3", "LLM")
+
+
+def tier_confidence_map(
+    matches: Sequence[MatchGroup],
+) -> dict[str, dict[str, float | bool | None]]:
+    """The confidence the engine stamped, per tier, for THIS run.
+
+    Derived from the matches rather than read off a table, so a change in the
+    engine's stamp reaches the console without anybody remembering to edit a
+    constant. `web/lib/tiers.ts` used to hold that constant and drifted: it
+    rendered the word "verified" on the LLM rung, where the engine stamps 0.70.
+
+    A tier that stamped two different confidences reports NEITHER. One of them
+    would be a true statement about some of its matches and a false statement
+    about the rest, and nothing on the wire would say which.
+    """
+    seen: dict[str, set[float]] = {key: set() for key in _TIER_KEYS}
+    for match in matches:
+        if match.tier in seen:
+            seen[match.tier].add(match.confidence)
+
+    out: dict[str, dict[str, float | bool | None]] = {}
+    for key in _TIER_KEYS:
+        values = seen[key]
+        out[key] = {
+            "confidence_observed": next(iter(values)) if len(values) == 1 else None,
+            "confidence_conflict": len(values) > 1,
+        }
+    return out
+
+
 @router.get("/api/runs/{id}", response_model=None, tags=["runs"])
 def get_run(id: str, repo: RepoDep) -> dict:
     """The full `RunSummary`, including `false_match_rate` and
@@ -262,7 +298,12 @@ def get_run(id: str, repo: RepoDep) -> dict:
     summary = repo.summary(id)
     if summary is None:
         raise HTTPException(status_code=404, detail=f"no run with id {id!r}")
-    return summary.model_dump(mode="json")
+    body = summary.model_dump(mode="json")
+    # Derived here rather than stored, so it is always this run's own figure.
+    # The console used to carry a hardcoded table instead and it drifted --
+    # rendering "verified" on the rung where the engine stamps 0.70.
+    body["tier_confidence"] = tier_confidence_map(repo.all_matches(id))
+    return body
 
 
 @router.get("/api/runs/{id}/status", response_model=None, tags=["runs"])

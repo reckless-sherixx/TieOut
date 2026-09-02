@@ -207,6 +207,12 @@ class Metrics(BaseModel):
     precision: float
     recall_on_resolvable: float
     trap_capture_rate: float
+    #: The denominator `trap_capture_rate` divided by -- the count of subjects
+    #: this dataset deliberately does not determine. It is 2 at 50 records and
+    #: 10 at 500, and without it `100.0%` of 2 renders exactly like `100.0%` of
+    #: 100. Defaulted so a stored run from before this field existed still
+    #: loads; None there means "not recorded", never "zero traps".
+    total_traps: int | None = None
     llm_rejection_rate: float
     throughput_records_per_sec: float
     llm_cost_usd_per_100: float

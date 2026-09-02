@@ -91,6 +91,10 @@ def score(
         trap_capture_rate=m.rate(
             comparison.traps_left_alone, comparison.total_traps, empty=1.0
         ),
+        # The denominator, from the SAME comparison the numerator came from, so
+        # the two cannot drift apart. A rate without it cannot be read: 100% of
+        # 2 and 100% of 100 are the same string.
+        total_traps=comparison.total_traps,
         llm_rejection_rate=m.rate(hypotheses_rejected, hypotheses_proposed),
         throughput_records_per_sec=m.rate(
             result.record_count, elapsed_seconds if elapsed_seconds else 0
