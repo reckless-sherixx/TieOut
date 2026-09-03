@@ -23,6 +23,11 @@ const DESTINATIONS = [
     label: "Files",
     match: (p: string) => p.startsWith("/uploads"),
   },
+  {
+    href: "/connections",
+    label: "Mailbox",
+    match: (p: string) => p.startsWith("/connections"),
+  },
   { href: "/method", label: "Method", match: (p: string) => p.startsWith("/method") },
 ];
 

@@ -82,7 +82,7 @@ export class ApiNetworkError extends Error {
   }
 }
 
-type RequestOptions = {
+export type RequestOptions = {
   signal?: AbortSignal;
 };
 
@@ -174,6 +174,17 @@ export function postJSON<T>(
     },
     options,
   );
+}
+
+/**
+ * A DELETE.
+ *
+ * Its own function rather than a `method` option on `postJSON`, because a
+ * parameter that can turn a POST into a DELETE makes every call site a place
+ * where a typo removes data. The verb is in the name.
+ */
+export function deleteJSON<T>(path: string, options?: RequestOptions): Promise<T> {
+  return request<T>(path, { method: "DELETE" }, options);
 }
 
 /**
