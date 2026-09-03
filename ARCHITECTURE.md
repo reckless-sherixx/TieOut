@@ -822,7 +822,7 @@ Two further scope facts, stated because omitting them would overclaim:
     |  HTTP + JSON only. web/ never reads core/models.py; the contract is
     |  api/openapi.yaml, from which web/lib/api-types.ts is generated.
     v
-  api/     FastAPI. 19 paths, 21 operations. Thin.
+  api/     FastAPI. 23 paths, 26 operations. Thin.
            Validate -> call core/ -> 404 a missing row -> serialise. No
            arithmetic: net, fees, tax and every rate arrive already computed
            and are passed through untouched.

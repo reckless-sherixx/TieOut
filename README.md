@@ -134,6 +134,44 @@ and the truth, `core/matcher/` must never read the truth, and `scorer/` compares
 
 Full detail, with file paths and line numbers, is in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
+## Where the files come from
+
+Three doors into the same engine, and none of them gets a shortcut past the
+sniff-and-quarantine path.
+
+**Upload.** Drag a file onto `/uploads`.
+
+**The mailbox.** There is no pull API for an Indian bank statement outside the
+RBI Account Aggregator network, and FIU registration there is open only to
+entities regulated by RBI, SEBI, IRDAI or PFRDA — Razorpay qualifies; a
+standalone tool does not. The bank already emails the statement every month, so
+`/connections` reads that mail. A credential is entered once, stored
+**AES-256-GCM with the connection id bound in as additional authenticated
+data**, and returned by no endpoint. The mailbox is opened read-only —
+`BODY.PEEK`, no flag set, nothing moved — and the search is scoped to named
+senders and a date window rather than the whole mailbox. Credit reports are
+refused **by name, before they are read**, and every skipped attachment is
+listed in the sync result: one silently not fetched would be indistinguishable
+from one the bank never sent, and only one of those means the control works.
+
+**The scheduler.** A loop wakes daily and fetches any mailbox whose last
+success is 30 days old. A failed sync does not advance the clock, so the next
+tick retries rather than skipping a month.
+
+## The report
+
+```
+GET /api/runs/{id}/report.pdf
+```
+
+The console shows the answer; the report defends it. Every derivation, every
+denominator, what each rung requires and the confidence the engine stamped on
+it, every exception with its cause, and what the run cannot tell you. It is a
+document a finance team can file with a month-end close, which six browser tabs
+are not — and its figures are tested equal to the run's wire values, because a
+report that drifts from the run it describes is the same defect as a console
+that hardcodes a confidence.
+
 ## What it cannot do
 
 - **Split settlements and obfuscated references are the entire accuracy gap.**
@@ -165,9 +203,11 @@ core/
   canonicalize/  transaction-type normalisation
   itc/           GST-on-MDR input tax credit reconciliation
   drift/         run-over-run comparison
-  store/         SQLite + encrypted blob store
+  connectors/    pull a file instead of waiting for an upload
+  store/         SQLite, encrypted blob store, encrypted credential vault
 scorer/          grades a result against truth.json
-api/             FastAPI, 19 paths / 21 operations, openapi.yaml is the contract
+report/          one run as a PDF that survives leaving the app
+api/             FastAPI, 23 paths / 26 operations, openapi.yaml is the contract
 web/             Next.js App Router console
 tests/           the credibility layer
 bench/           scale baselines held byte-identical across optimisation
