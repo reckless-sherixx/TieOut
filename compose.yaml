@@ -1,0 +1,92 @@
+# Tieout, whole. One command:
+#
+#   docker compose up --build
+#
+# then http://localhost:3000 for the console and http://localhost:8000/docs for
+# the API. `docker compose down` stops it; `docker compose down -v` also throws
+# away the database.
+#
+# --- two images, not one ------------------------------------------------------
+#
+# A Python ASGI app and a Node server are two runtimes, two dependency trees and
+# two failure modes. Putting both behind a supervisor in one image would mean a
+# crash in either one is invisible from outside, and `docker compose logs web`
+# would not exist. Compose is what makes two containers one command.
+#
+# --- the variable that decides whether any of this is real --------------------
+#
+# `NEXT_PUBLIC_*` is inlined into the browser bundle AT BUILD TIME. Setting it
+# under `environment:` does nothing -- by then the value is already compiled in.
+# So both live under `build.args` below, and `web/Dockerfile` fails the build if
+# mocking was not switched off. Without that, the console renders a complete,
+# confident, entirely fictional set of numbers while the API sits idle.
+#
+# `NEXT_PUBLIC_API_BASE` is the URL **the browser** uses. The browser runs on
+# your machine, outside this network, so it must be the published host port --
+# `http://api:8000` resolves only between containers and would fail in the tab.
+
+name: tieout
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tieout-api
+    ports:
+      - "8000:8000"
+    environment:
+      # Paths into the volume. The image already sets these; repeated here so
+      # this file names every piece of writable state rather than hiding it in
+      # a layer.
+      RECON_DB_PATH: /data/recon.db
+      RECON_DATASETS_DIR: /data/datasets
+      RECON_UPLOADS_DIR: /data/uploads
+      # The console's published origin, which is what the browser sends.
+      RECON_CORS_ORIGINS: ${RECON_CORS_ORIGINS:-http://localhost:3000}
+      # The monthly fetcher. On by default; set RECON_SYNC_ENABLED=0 in .env to
+      # stop the loop being created at all.
+      RECON_SYNC_ENABLED: ${RECON_SYNC_ENABLED:-1}
+    env_file:
+      # Optional. If you have a .env it is passed through, which is what makes
+      # the Gemini analyst and the mailbox work in the container.
+      #
+      # BE AWARE THAT THIS PUTS REAL CREDENTIALS INTO A CONTAINER. That is the
+      # point for a demo on your own machine, and it is the wrong default for
+      # anything shared. `.env` is gitignored AND dockerignored, so it never
+      # enters an image layer -- it is injected at run time and disappears with
+      # the container.
+      #
+      # Without it the app still runs: the analyst is unavailable and
+      # POST /api/connections answers 422 naming RECON_BLOB_KEY rather than
+      # storing a credential it cannot encrypt.
+      - path: .env
+        required: false
+    volumes:
+      - tieout-data:/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        # Build-time, and load-bearing. See the note at the top of this file.
+        NEXT_PUBLIC_API_MOCKING: disabled
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:8000}
+    image: tieout-web
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        # Ordering only. The browser calls the API directly, so a console that
+        # started first would still work the moment the API came up -- but a
+        # reviewer opening the tab during those three seconds would see an
+        # error state and conclude the thing is broken.
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  # Named, so `docker compose down` keeps your runs and `down -v` is the
+  # explicit way to discard them.
+  tieout-data:

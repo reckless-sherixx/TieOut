@@ -35,7 +35,17 @@
 # not appear in the runtime stage.
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
+# UV_COMPILE_BYTECODE_TIMEOUT is not decoration. The default is 60 seconds per
+# file, and `google/genai/models.py` exceeds it on a cold builder -- the build
+# then dies with a message about bytecode rather than about the package, having
+# already spent five minutes downloading. It is intermittent, which is worse
+# than reproducible: it passes on the retry and fails on the reviewer's machine.
+#
+# The compilation is worth keeping rather than switching off. The runtime stage
+# sets PYTHONDONTWRITEBYTECODE and runs as a user with no write access to /app,
+# so anything not compiled here is re-parsed from source on every start.
 ENV UV_COMPILE_BYTECODE=1 \
+    UV_COMPILE_BYTECODE_TIMEOUT=600 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never
 
@@ -85,6 +95,30 @@ ENV RECON_DB_PATH=/data/recon.db \
     RECON_DATASETS_DIR=/data/datasets \
     RECON_UPLOADS_DIR=/data/uploads
 
+# --- one font, and why an image that answers HTTP needs one -------------------
+#
+# `report/build.py` renders every amount through `core/money.fmt_inr`, which
+# emits U+20B9, the rupee sign. **No base-14 PDF font encodes it**, so reportlab
+# falls back to Helvetica and each amount renders as a black box -- U+25A0 --
+# in a document whose entire subject is money. `report/fonts.py` looks for a
+# system TTF and verifies the glyph against the font's own cmap, but a
+# `-slim` image ships no fonts at all, so there is nothing for it to find.
+#
+# Verified on 2026-09-04: without this the containerised report contained no
+# U+20B9 and did contain U+25A0. The host, which has Arial, was fine -- which is
+# exactly why this had to be checked in the container rather than reasoned about.
+#
+# DejaVu rather than Noto: ~1.5 MB against ~25 MB, and it has carried U+20B9
+# since 2.34. `fonts-dejavu-core` is the smallest package that contains it.
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends fonts-dejavu-core; \
+    rm -rf /var/lib/apt/lists/*; \
+    test -f /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+
+ENV RECON_REPORT_FONT=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf \
+    RECON_REPORT_FONT_BOLD=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+
 # A non-root user. The API writes to exactly one place -- /data -- so /app can
 # be owned by root and read-only to the process, which means a compromised
 # request handler cannot rewrite the code it is running.
@@ -107,9 +141,18 @@ COPY --from=builder --chown=root:root /app/.venv /app/.venv
 #   api/      the ASGI app, the routes, the settings, the contract
 #   core/     the engine: matcher, generator, adapters, store, llm, itc, drift
 #   scorer/   the metrics, imported by `api/jobs.py`
+#   report/   the PDF renderer, imported by `GET /api/runs/{id}/report.pdf`
+#
+# The explicit list is what caught `report/` going missing: it was added to the
+# repository after this file was written, `uv sync` installed reportlab so the
+# import looked satisfiable, and the route answered 500 with
+# `ModuleNotFoundError: No module named 'report'` -- in the container only, on a
+# path no test exercises. `COPY . .` would have hidden that by shipping
+# everything, including whatever lands in the repository next.
 COPY --chown=root:root api/ /app/api/
 COPY --chown=root:root core/ /app/core/
 COPY --chown=root:root scorer/ /app/scorer/
+COPY --chown=root:root report/ /app/report/
 COPY --chown=root:root pyproject.toml uv.lock /app/
 
 USER recon

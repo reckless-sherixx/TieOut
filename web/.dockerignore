@@ -1,0 +1,44 @@
+# What must never enter the console's build context.
+#
+# THIS FILE IS NOT OPTIONAL AND THE ROOT .dockerignore DOES NOT COVER IT.
+# `compose.yaml` builds this image with `context: ./web`, and Docker resolves
+# `.dockerignore` relative to the CONTEXT, not the repository. Without this
+# file the context is `node_modules` plus `.next` -- measured at 300 MB and
+# still climbing when it was first tried, several minutes of transfer before a
+# single instruction ran, to ship files the build then throws away.
+#
+# Everything the image needs is either reinstalled from the lockfile (stage 1)
+# or produced by `next build` (stage 2). Nothing excluded here is missed.
+
+# --- secrets ------------------------------------------------------------------
+# `.env.local` holds NEXT_PUBLIC_* overrides on a developer machine. Those are
+# BUILD-TIME values, so a stray copy in the context would silently outrank the
+# build args `compose.yaml` passes -- and the way that failure presents is a
+# console serving mocks, which looks like a working demo.
+.env
+.env.*
+!.env.example
+
+# --- reinstalled, never copied ------------------------------------------------
+node_modules
+
+# --- rebuilt, never copied ----------------------------------------------------
+.next
+out
+build
+dist
+next-env.d.ts
+
+# --- irrelevant to a production build -----------------------------------------
+.git
+.gitignore
+Dockerfile
+.dockerignore
+README.md
+AGENTS.md
+CLAUDE.md
+*.log
+npm-debug.log*
+.DS_Store
+coverage
+.vercel

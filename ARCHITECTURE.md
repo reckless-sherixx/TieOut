@@ -1317,6 +1317,42 @@ channel five parallel lanes had.
 
 ## 17. Running it
 
+### 17.1 In containers
+
+```
+docker compose up --build
+```
+
+Two images, not one. A Python ASGI app and a Node server are two runtimes, two
+dependency trees and two failure modes; behind a supervisor in a single image a
+crash in either is invisible from outside and `docker compose logs web` does not
+exist. Compose is what makes two containers one command.
+
+Three things in that setup are load-bearing and none of them is obvious:
+
+**`NEXT_PUBLIC_*` is inlined at build time, so it lives in `build.args` and not
+in `environment:`.** By the time a container starts, the value is already
+compiled into the JavaScript the browser downloads. `NEXT_PUBLIC_API_MOCKING`
+defaults to `enabled` in `web/lib/api.ts`, so an image built without
+`disabled` serves a bundle that answers every request from MSW while the API
+container sits beside it, healthy and unused. `web/Dockerfile` greps its own
+build output and **fails the build** rather than let that ship: the failure is
+otherwise discovered during a recording.
+
+**`NEXT_PUBLIC_API_BASE` is the URL the BROWSER uses.** The browser runs on the
+host, outside the compose network, so `http://api:8000` — which is what the
+service name suggests — resolves only between containers and fails in the tab.
+It has to be the published host port.
+
+**`web/.dockerignore` is not optional, and the root one does not cover it.**
+Compose builds the console with `context: ./web`, and Docker resolves
+`.dockerignore` relative to the context rather than to the repository. Without
+it the context is `node_modules` plus `.next`: measured at 300 MB and still
+climbing, several minutes of transfer before a single instruction ran, to ship
+files the build then discards.
+
+### 17.2 On the host
+
 `uv` is installed as a Python package and its shim is not on PATH; invoke it as
 `python -m uv`.
 

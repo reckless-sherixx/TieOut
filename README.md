@@ -49,6 +49,24 @@ as one.
 
 ## Quickstart
 
+One command, both services, nothing installed but Docker:
+
+```bash
+docker compose up --build
+```
+
+Console on http://localhost:3000, API on http://localhost:8000/docs. `docker
+compose down` stops it; add `-v` to discard the database with it.
+
+A `.env` is picked up if you have one, which is what makes the Gemini analyst
+and the mailbox work — and which puts real credentials into a container, so it
+is the right default on your own machine and the wrong one anywhere shared.
+Without it the app still runs: the analyst is unavailable, and
+`POST /api/connections` answers 422 naming `RECON_BLOB_KEY` rather than storing
+a credential it cannot encrypt.
+
+### Or without Docker
+
 `uv` is installed as a Python package and its shim is not on PATH, so invoke it
 as `python -m uv`.
 
@@ -212,6 +230,9 @@ web/             Next.js App Router console
 tests/           the credibility layer
 bench/           scale baselines held byte-identical across optimisation
 fixtures/        tiny, seed42-50, seed42-500 committed; seed42-5000 regenerated
+Dockerfile       the API image
+web/Dockerfile   the console image, standalone Next output
+compose.yaml     both of them, one command
 ```
 
 ## Stack
