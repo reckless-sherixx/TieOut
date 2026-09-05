@@ -47,23 +47,72 @@ through this door reports what it matched and excepted and **no rate at all**,
 because nothing graded it. That absence is a feature, and the console renders it
 as one.
 
-## Quickstart
+## Quickstart — Docker
 
-One command, both services, nothing installed but Docker:
+The only prerequisite is Docker Desktop (or Docker Engine with the Compose
+plugin). Nothing else needs installing: no Python, no Node, no database.
+
+**1. Start both services with one command**
 
 ```bash
 docker compose up --build
 ```
 
-Console on http://localhost:3000, API on http://localhost:8000/docs. `docker
-compose down` stops it; add `-v` to discard the database with it.
+First build takes a few minutes. Add `-d` to run it in the background.
 
-A `.env` is picked up if you have one, which is what makes the Gemini analyst
-and the mailbox work — and which puts real credentials into a container, so it
+**2. Open the console**
+
+| | |
+|---|---|
+| Console | http://localhost:3000 |
+| API docs | http://localhost:8000/docs |
+
+Compose waits for the API to report healthy before starting the console, so if
+the page loads, the backend is already up.
+
+**3. Make a run**
+
+Click **New run** on the console, keep the defaults (seed 42, 500 records) and
+submit. That generates a labelled adversarial dataset and reconciles it — you
+should see **87.6% auto-matched, 0.0% false matches, 10 of 10 traps declined**.
+Those figures are seeded, so they reproduce exactly on your machine.
+
+To do the same from the command line:
+
+```bash
+curl -s -X POST http://localhost:8000/api/datasets/generate -H 'Content-Type: application/json' -d '{"seed":42,"record_count":500}'
+```
+
+```bash
+curl -s -X POST http://localhost:8000/api/runs -H 'Content-Type: application/json' -d '{"dataset_id":"PASTE_ID_FROM_ABOVE","use_llm":false}'
+```
+
+**4. Stop it**
+
+```bash
+docker compose down
+```
+
+The database lives in a named volume and survives a restart. Add `-v` to
+discard it.
+
+### Optional: a `.env`
+
+Picked up automatically if present. It is what enables the Gemini analyst and
+the mailbox connector — and it puts real credentials inside a container, so it
 is the right default on your own machine and the wrong one anywhere shared.
-Without it the app still runs: the analyst is unavailable, and
+
+Without it the app still runs: the analyst is simply unavailable, and
 `POST /api/connections` answers 422 naming `RECON_BLOB_KEY` rather than storing
 a credential it cannot encrypt.
+
+### If something goes wrong
+
+| Symptom | Cause |
+|---|---|
+| `port is already allocated` | Something else holds 3000 or 8000. Stop it, or change the published port in `compose.yaml`. |
+| Console shows data but the API log is silent | The console is serving MSW mocks. `NEXT_PUBLIC_*` is inlined at **build** time, so rebuild with `docker compose up --build` rather than restarting. |
+| `docker compose ps` shows `web` waiting | Normal — it starts only once `api` reports healthy. |
 
 ### Or without Docker
 
@@ -150,7 +199,8 @@ and the truth, `core/matcher/` must never read the truth, and `scorer/` compares
 `tests/test_boundaries.py` walks the import graph and proves the perimeter holds
 — and documents the two ways it can still be bypassed.
 
-Full detail, with file paths and line numbers, is in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+How the whole pipeline fits together, stage by stage, is in
+**[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ## Where the files come from
 
